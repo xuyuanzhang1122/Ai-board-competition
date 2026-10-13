@@ -44,3 +44,6 @@ TASKS.md
 TOOLBOX_MIGRATION.md
 WORKFLOW.md
 geeknow
+# Local runtime configuration; never commit credentials
+backend/src/main/resources/application.properties
+backend/src/main/resources/application-*.properties
