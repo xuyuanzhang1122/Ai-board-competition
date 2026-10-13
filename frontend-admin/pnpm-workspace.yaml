@@ -1,0 +1,7 @@
+allowBuilds:
+  simple-git-hooks: false
+  unrs-resolver: true
+minimumReleaseAgeExclude:
+  - '@lobehub/ui@5.17.2'
+  - eslint@10.6.0
+  - prettier@3.8.5

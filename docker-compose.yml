@@ -1,0 +1,123 @@
+services:
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: ai-studio-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: 1234
+      MYSQL_DATABASE: ai_story_studio
+      TZ: Asia/Shanghai
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+    networks:
+      - ai-studio-network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: ai-studio-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      timeout: 20s
+      retries: 10
+    networks:
+      - ai-studio-network
+
+  # RabbitMQ Message Queue
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: ai-studio-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: admin123
+      RABBITMQ_DEFAULT_VHOST: /
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      timeout: 20s
+      retries: 10
+    networks:
+      - ai-studio-network
+
+  # Backend Service
+  backend:
+    build:
+      context: .
+      dockerfile: ./Dockerfile.backend
+    container_name: ai-studio-backend
+    env_file:
+      - .env
+    environment:
+      # 容器内服务地址覆盖 application.yml 里的 ${...:localhost} 默认值
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/ai_story_studio?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+      REDIS_HOST: redis
+      RABBITMQ_HOST: rabbitmq
+      # 专用图片轮询监听器可配到8并发；默认队列仍只启动1个消费者。
+      SPRING_RABBITMQ_LISTENER_SIMPLE_MAX_CONCURRENCY: 16
+      LOCAL_STORAGE_PATH: /app/uploads
+    ports:
+      - "8080:8080"
+    volumes:
+      - backend_uploads:/app/uploads
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - ai-studio-network
+    restart: unless-stopped
+
+  # Frontend Service
+  frontend:
+    build:
+      context: .
+      dockerfile: ./Dockerfile.frontend
+    container_name: ai-studio-frontend
+    ports:
+      - "8081:80"
+    depends_on:
+      - backend
+    networks:
+      - ai-studio-network
+    restart: unless-stopped
+
+  # Admin Frontend Service
+  frontend-admin:
+    build:
+      context: .
+      dockerfile: ./Dockerfile.admin
+    container_name: ai-studio-frontend-admin
+    ports:
+      - "8082:80"
+    depends_on:
+      - backend
+    networks:
+      - ai-studio-network
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
+  redis_data:
+  rabbitmq_data:
+  backend_uploads:
+
+networks:
+  ai-studio-network:
+    driver: bridge

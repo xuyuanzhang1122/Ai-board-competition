@@ -1,0 +1,46 @@
+# ── Secrets / local config (NEVER commit) ──
+.env
+.env.local
+.env.*.local
+backend/.env
+backend/.env.local
+backend/src/main/resources/application.yml
+backend/src/main/resources/application-*.yml
+
+# ── Backend runtime / build artifacts ──
+backend/target/
+backend/uploads/
+backend/logs/
+backend/mvn-spring-boot.log
+backend/mvn-spring-boot.err.log
+logs/
+
+# ── Frontend (React) ──
+node_modules/
+dist/
+dist-ssr/
+*.local
+.vite/
+
+# ── IDE / OS ──
+.idea/
+.vscode/
+*.iml
+.DS_Store
+
+# ── Misc ──
+HELP.md
+.firecrawl/
+user-self.md
+ADMIN_MIGRATION.md
+BACKEND_DEPLOYMENT.md
+DOCKER_SETUP.md
+EDITOR_MIGRATION.md
+FEATURE_FLAGS.md
+GEEKNOW_PROVIDER_MIGRATION.md
+HANDOFF.md
+MIGRATION_PLAN.md
+TASKS.md
+TOOLBOX_MIGRATION.md
+WORKFLOW.md
+geeknow

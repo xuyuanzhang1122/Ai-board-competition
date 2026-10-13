@@ -1,0 +1,2 @@
+org.springframework.boot.env.EnvironmentPostProcessor=\
+com.ym.ai_story_studio_server.config.DotenvEnvironmentPostProcessor

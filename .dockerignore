@@ -1,0 +1,43 @@
+node_modules
+# Nested lockfile installs (frontend/, frontend-admin/, backend/target) live below
+# the context root, so bare names above do not match them — use ** globs. Without
+# this the local pnpm node_modules (symlinks) is shipped into the build context and
+# `COPY frontend/ ./` fails trying to overlay symlinks onto npm ci's directories.
+**/node_modules
+**/dist
+**/build
+**/target
+npm-debug.log
+dist
+build
+.git
+.gitignore
+.DS_Store
+.env
+.env.local
+target
+*.class
+*.jar
+.idea
+.vscode
+*.swp
+*.swo
+*~
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+.cache/
+.parcel-cache
+.next
+out
+.nuxt
+dist
+.cache/
+.vuepress/dist
+.serverless/
+.fusebox/
+.dynamodb/
+.tern-port
