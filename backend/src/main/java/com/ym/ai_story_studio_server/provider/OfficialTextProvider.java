@@ -1,0 +1,155 @@
+package com.ym.ai_story_studio_server.provider;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ym.ai_story_studio_server.common.ResultCode;
+import com.ym.ai_story_studio_server.exception.BusinessException;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.DisposableBean;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
+import org.apache.hc.client5.http.config.ConnectionConfig;
+import org.apache.hc.client5.http.config.RequestConfig;
+import org.apache.hc.client5.http.impl.classic.HttpClients;
+import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManagerBuilder;
+import org.apache.hc.core5.util.Timeout;
+import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+/** Official endpoints only. No automatic retries, supplier fallback or HTTP redirects. */
+@Component
+public class OfficialTextProvider implements TextGenerationProvider, DisposableBean {
+    private static final Set<String> DEEPSEEK_MODELS = Set.of("deepseek-flash", "deepseek-v4-pro");
+    private static final Set<String> MIMO_MODELS = Set.of("mimo-v2.6-pro");
+    private static final Set<String> MIMO_ENDPOINTS = Set.of(
+            "https://api.xiaomimimo.com/v1", "https://token-plan-cn.xiaomimimo.com/v1");
+    private final TextProviderProperties properties;
+    private final RestClient.Builder builder;
+    private final HttpComponentsClientHttpRequestFactory ownedFactory;
+    private final ObjectMapper mapper = new ObjectMapper();
+
+    @Autowired
+    public OfficialTextProvider(TextProviderProperties properties) {
+        this.properties = properties;
+        this.ownedFactory = productionRequestFactory();
+        this.builder = RestClient.builder().requestFactory(ownedFactory);
+    }
+
+    OfficialTextProvider(TextProviderProperties properties, RestClient.Builder builder) {
+        this.properties = properties;
+        this.builder = builder;
+        this.ownedFactory = null;
+    }
+
+    static HttpComponentsClientHttpRequestFactory productionRequestFactory() {
+        var manager = PoolingHttpClientConnectionManagerBuilder.create()
+                .setDefaultConnectionConfig(ConnectionConfig.custom()
+                        .setConnectTimeout(Timeout.ofSeconds(15)).setSocketTimeout(Timeout.ofSeconds(90)).build())
+                .build();
+        var client = HttpClients.custom().setConnectionManager(manager)
+                .setDefaultRequestConfig(RequestConfig.custom().setResponseTimeout(Timeout.ofSeconds(90)).build())
+                .disableAutomaticRetries().disableRedirectHandling().build();
+        return new HttpComponentsClientHttpRequestFactory(client);
+    }
+
+    @Override
+    public void destroy() throws Exception {
+        if (ownedFactory != null) ownedFactory.destroy();
+    }
+
+    private boolean isDeepseek(String model) {
+        return model != null && DEEPSEEK_MODELS.contains(model);
+    }
+
+    @Override
+    public void validateModelConfiguration(String model) {
+        boolean deepseek = isDeepseek(model);
+        if (!deepseek && (model == null || !MIMO_MODELS.contains(model))) {
+            throw new BusinessException(ResultCode.PARAM_INVALID, "文本模型已停用或不受支持，请重新选择");
+        }
+        TextProviderProperties.Endpoint endpoint = deepseek ? properties.getDeepseek() : properties.getMimo();
+        if (endpoint == null || !endpoint.isEnabled() || endpoint.getApiKey() == null || endpoint.getApiKey().isBlank()) {
+            throw new BusinessException(ResultCode.CONFIG_ERROR, "所选文本供应商尚未启用或未配置凭据");
+        }
+        String baseUrl = normalizedBaseUrl(endpoint);
+        if (deepseek ? !"https://api.deepseek.com".equals(baseUrl) : !MIMO_ENDPOINTS.contains(baseUrl)) {
+            throw new BusinessException(ResultCode.CONFIG_ERROR, "文本供应商地址必须使用已支持的官方入口");
+        }
+    }
+
+    private String normalizedBaseUrl(TextProviderProperties.Endpoint endpoint) {
+        String url = endpoint.getBaseUrl();
+        return url == null ? "" : url.trim().replaceAll("/+$", "");
+    }
+
+    @Override
+    public void validateRequest(String prompt, String model, Integer maxTokens, Double temperature, Double topP) {
+        validateModelConfiguration(model);
+        if (prompt == null || prompt.isBlank() || maxTokens == null || maxTokens < 1 || maxTokens > 32768
+                || temperature != null && (!Double.isFinite(temperature) || temperature < 0 || temperature > 1)
+                || topP != null && (!Double.isFinite(topP) || topP <= 0 || topP > 1)) {
+            throw new BusinessException(ResultCode.PARAM_INVALID, "文本输入或生成参数不合法");
+        }
+    }
+
+    @Override
+    public TextGenerationResult generateText(String prompt, String model, Integer maxTokens,
+                                              Double temperature, Double topP) {
+        validateRequest(prompt, model, maxTokens, temperature, topP);
+        boolean deepseek = isDeepseek(model);
+        TextProviderProperties.Endpoint endpoint = deepseek ? properties.getDeepseek() : properties.getMimo();
+        String supplier = deepseek ? "DEEPSEEK" : "MIMO";
+        Map<String, Object> body = new HashMap<>();
+        body.put("model", model);
+        body.put("messages", List.of(Map.of("role", "user", "content", prompt)));
+        body.put("stream", false);
+        body.put(deepseek ? "max_tokens" : "max_completion_tokens", maxTokens);
+        if (temperature != null) body.put("temperature", temperature);
+        if (deepseek) body.put("thinking", Map.of("type", "disabled"));
+        else if (topP != null) body.put("top_p", topP);
+
+        try {
+            String raw = builder.clone().baseUrl(normalizedBaseUrl(endpoint)).build().post()
+                    .uri("/chat/completions").header(HttpHeaders.AUTHORIZATION, "Bearer " + endpoint.getApiKey())
+                    .contentType(MediaType.APPLICATION_JSON).body(body).retrieve()
+                    .onStatus(status -> !status.is2xxSuccessful(), (request, response) -> {
+                        throw new BusinessException(ResultCode.AI_SERVICE_ERROR,
+                                "文本供应商请求失败（HTTP " + response.getStatusCode().value() + "）");
+                    }).body(String.class);
+            JsonNode root = mapper.readTree(raw == null ? "" : raw);
+            JsonNode choice = root == null ? null : root.path("choices").path(0);
+            if (choice == null || !choice.path("message").path("content").isTextual()
+                    || choice.path("message").path("content").asText().isBlank()
+                    || !"stop".equals(choice.path("finish_reason").asText())) {
+                throw new BusinessException(ResultCode.AI_SERVICE_ERROR, "文本供应商未返回完整有效结果");
+            }
+            JsonNode usage = root.path("usage");
+            Integer tokens = tokenCount(usage.path("total_tokens"));
+            if (tokens == null) {
+                Integer input = tokenCount(usage.path("prompt_tokens"));
+                Integer output = tokenCount(usage.path("completion_tokens"));
+                if (input != null && output != null && (long) input + output <= Integer.MAX_VALUE) tokens = input + output;
+            }
+            return new TextGenerationResult(choice.path("message").path("content").asText(),
+                    root.path("model").asText(null), supplier, root.path("id").asText(null), tokens);
+        } catch (BusinessException e) {
+            throw e;
+        } catch (RestClientException e) {
+            // Transport may fail after acceptance: do not submit again or expose request/error bodies.
+            throw new BusinessException(ResultCode.AI_SERVICE_ERROR, "文本请求未完成，请核对任务后再尝试");
+        } catch (Exception e) {
+            throw new BusinessException(ResultCode.AI_SERVICE_ERROR, "文本供应商响应无法解析");
+        }
+    }
+
+    private Integer tokenCount(JsonNode value) {
+        return value.isIntegralNumber() && value.canConvertToInt() && value.intValue() >= 0 ? value.intValue() : null;
+    }
+}
