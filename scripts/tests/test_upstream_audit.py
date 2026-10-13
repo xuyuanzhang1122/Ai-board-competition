@@ -54,11 +54,26 @@ class UpstreamAuditTest(unittest.TestCase):
         self.write("backend/src/main/java/Untracked.java", "GeeknowClient", tracked=False)
         for path in [".env", "backend/.env", "backend/src/main/resources/application.properties",
                      "backend/src/main/resources/application-local.yml", "docs/plan.md",
-                     "frontend/node_modules/old.ts", "frontend/pnpm-lock.yaml"]:
-            self.write(path, "Geeknow secret=DO_NOT_READ")
+                     "frontend/node_modules/old.ts", "frontend/pnpm-lock.yaml",
+                     "backend/src/main/resources/credentials/provider.json",
+                     "infra/secrets/provider.json"]:
+            target = self.write(path, "Geeknow secret=DO_NOT_READ")
+            if "credentials" in target.parts or "secrets" in target.parts:
+                # A read would produce a decoding error and fail the audit.
+                target.write_bytes(b"\xff\xfeDO_NOT_READ")
         result = self.run_audit("--check")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)["findings"], [])
+
+    def test_nested_configuration_samples_and_module_sources_are_scanned(self):
+        for path in ["infra/competition/.env.example", "backend/.env.example",
+                     "backend/src/main/resources/application.properties.example",
+                     "frontend/src/provider.mjs", "frontend-admin/src/provider.cjs",
+                     "frontend/vite.config.ts"]:
+            self.write(path, "Geeknow\n")
+        result = self.run_audit("--check")
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["counts"]["runtime"], 6)
 
     def test_new_provider_names_are_not_old_upstreams(self):
         self.write("backend/src/main/java/Providers.java", "MiMo DeepSeek Volcengine Kling\n")

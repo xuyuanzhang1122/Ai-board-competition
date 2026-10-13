@@ -25,19 +25,25 @@ RULES = {
         r"\bsd-(?:api-)?2-|doubao-seedream-5", re.I
     ),
 }
-SUFFIXES = {".java", ".ts", ".tsx", ".js", ".jsx", ".json", ".sql",
+SUFFIXES = {".java", ".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs", ".json", ".sql",
             ".properties", ".yml", ".yaml", ".conf", ".xml", ".sh"}
 
 
 def category(name):
     path = PurePosixPath(name)
     # Local credentials are excluded even if accidentally added to the index.
-    if any(part in {"node_modules", "target", "dist", ".git"} for part in path.parts):
+    if any(part in {"node_modules", "target", "dist", ".git", "credentials", "secrets"}
+           for part in path.parts):
         return None
     if path.name.startswith(".env") and not path.name.endswith(".example"):
         return None
     if path.name.startswith("application") and path.suffix in {".properties", ".yml", ".yaml"}:
         return None
+    if path.name.endswith(".example") and (
+        path.name.startswith(".env")
+        or path.name.startswith("application")
+    ):
+        return "runtime"
     if name.startswith("backend/src/main/resources/db/migration/") and path.suffix == ".sql":
         return "historical_migration"
     if name.startswith("backend/src/test/") or (
@@ -49,6 +55,8 @@ def category(name):
         return "runtime" if path.suffix in SUFFIXES else None
     if name == ".env.example" or name.startswith("Dockerfile"):
         return "runtime"
+    if len(path.parts) == 2 and path.parts[0] in {"frontend", "frontend-admin"}:
+        return "runtime" if path.suffix in {".ts", ".js", ".mjs", ".cjs", ".json"} else None
     if path.suffix in SUFFIXES and (len(path.parts) == 1 or name.startswith("infra/")):
         return "runtime"
     return None
