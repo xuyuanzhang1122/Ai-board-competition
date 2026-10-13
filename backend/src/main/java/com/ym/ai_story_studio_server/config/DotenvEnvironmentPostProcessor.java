@@ -5,6 +5,7 @@ import org.springframework.boot.env.EnvironmentPostProcessor;
 import org.springframework.core.Ordered;
 import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.MapPropertySource;
+import org.springframework.core.env.StandardEnvironment;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -21,23 +22,55 @@ import java.util.Set;
  * Loads project .env files before Spring binds application.yml placeholders.
  *
  * <p>Load order is project root .env first, then backend/.env, so backend-specific
- * values can override shared values. Loaded values are added before system
- * environment variables to make the local .env the source of truth in dev.
+ * values can override shared values. Explicit startup properties and system
+ * environment variables always override local files.
+ * Set APP_DOTENV_ENABLED=false to skip local files, or APP_DOTENV_PATH to load
+ * exactly one explicit file without merging copied project files.
  */
 public class DotenvEnvironmentPostProcessor implements EnvironmentPostProcessor, Ordered {
 
     private static final String PROPERTY_SOURCE_NAME = "projectDotenv";
+    private final Path workingDirectory;
+
+    public DotenvEnvironmentPostProcessor() {
+        this(Paths.get(""));
+    }
+
+    DotenvEnvironmentPostProcessor(Path workingDirectory) {
+        this.workingDirectory = workingDirectory.toAbsolutePath().normalize();
+    }
 
     @Override
     public void postProcessEnvironment(ConfigurableEnvironment environment, SpringApplication application) {
+        if (!environment.getProperty("app.dotenv.enabled", Boolean.class, true)) {
+            return;
+        }
         Map<String, Object> properties = new LinkedHashMap<>();
-        for (Path path : candidateFiles()) {
-            if (Files.isRegularFile(path)) {
-                load(path, properties);
+        String explicitPath = environment.getProperty("app.dotenv.path");
+        if (explicitPath != null) {
+            try {
+                load(workingDirectory.resolve(explicitPath).normalize(), properties);
+            } catch (IOException | RuntimeException e) {
+                throw new IllegalStateException("Explicit dotenv file cannot be loaded");
+            }
+        } else {
+            for (Path path : candidateFiles()) {
+                if (Files.isRegularFile(path)) {
+                    try {
+                        load(path, properties);
+                    } catch (IOException ignored) {
+                        // Default local files remain optional for development.
+                    }
+                }
             }
         }
         if (!properties.isEmpty()) {
-            environment.getPropertySources().addFirst(new MapPropertySource(PROPERTY_SOURCE_NAME, properties));
+            MapPropertySource source = new MapPropertySource(PROPERTY_SOURCE_NAME, properties);
+            if (environment.getPropertySources().contains(StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME)) {
+                environment.getPropertySources().addAfter(StandardEnvironment.SYSTEM_ENVIRONMENT_PROPERTY_SOURCE_NAME, source);
+            } else {
+                environment.getPropertySources().addLast(source);
+            }
         }
     }
 
@@ -46,8 +79,8 @@ public class DotenvEnvironmentPostProcessor implements EnvironmentPostProcessor,
         return Ordered.HIGHEST_PRECEDENCE + 10;
     }
 
-    private static Set<Path> candidateFiles() {
-        Path cwd = Paths.get("").toAbsolutePath().normalize();
+    private Set<Path> candidateFiles() {
+        Path cwd = workingDirectory;
         Path projectRoot = cwd;
         if ("backend".equalsIgnoreCase(String.valueOf(cwd.getFileName()))) {
             projectRoot = cwd.getParent();
@@ -63,14 +96,12 @@ public class DotenvEnvironmentPostProcessor implements EnvironmentPostProcessor,
         return candidates;
     }
 
-    private static void load(Path path, Map<String, Object> target) {
+    private static void load(Path path, Map<String, Object> target) throws IOException {
         try (BufferedReader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
             String line;
             while ((line = reader.readLine()) != null) {
                 parseLine(line).forEach(target::put);
             }
-        } catch (IOException ignored) {
-            // Optional local configuration; keep startup behavior unchanged if unreadable.
         }
     }
 
