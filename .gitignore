@@ -47,3 +47,11 @@ geeknow
 # Local runtime configuration; never commit credentials
 backend/src/main/resources/application.properties
 backend/src/main/resources/application-*.properties
+
+# Local implementation ledger and Python cache
+.superpowers/
+__pycache__/
+*.pyc
+# Provider credentials supplied during competition development
+credentials/
+secrets/
