@@ -1,0 +1,55 @@
+# Dependency services only. Do not merge with the legacy root compose file.
+name: ai-board-competition-dev
+
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: ${COMPETITION_MYSQL_ROOT_PASSWORD:?Set a separate competition root password}
+      MYSQL_DATABASE: ai_board_competition
+      MYSQL_USER: competition
+      MYSQL_PASSWORD: ${COMPETITION_MYSQL_PASSWORD:?Set a separate competition database password}
+      TZ: Asia/Shanghai
+    ports:
+      - "127.0.0.1:13307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "127.0.0.1:16379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: competition
+      RABBITMQ_DEFAULT_PASS: ${COMPETITION_RABBITMQ_PASSWORD:?Set a separate competition queue password}
+      RABBITMQ_DEFAULT_VHOST: competition
+    ports:
+      - "127.0.0.1:15673:5672"
+      - "127.0.0.1:25673:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  mysql_data:
+  redis_data:
+  rabbitmq_data:
