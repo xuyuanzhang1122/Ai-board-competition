@@ -52,7 +52,7 @@ public record TextGenerateRequest(
         Long projectId,
 
         @Pattern(
-                regexp = "gemini-3.5-flash|gpt-4o|deepseek-v4-flash|deepseek-v4-pro|agnes-2.0-flash",
+                regexp = "deepseek-flash|deepseek-v4-pro|mimo-v2\\.6-pro",
                 message = "不支持的文本生成模型"
         )
         String model

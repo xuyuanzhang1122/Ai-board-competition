@@ -48,7 +48,7 @@ import java.util.Map;
  *     ChargingRequest.builder()
  *         .jobId(job.getId())
  *         .bizType("TEXT_GENERATION")
- *         .modelCode("gemini-3.5-flash")
+ *         .modelCode("deepseek-flash")
  *         .quantity(1500)  // 1500个token
  *         .build()
  * );

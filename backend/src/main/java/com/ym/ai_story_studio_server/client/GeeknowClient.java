@@ -87,14 +87,12 @@ public class GeeknowClient {
     );
 
     private final List<ClientEndpoint> geeknowEndpoints;
-    private final AiProperties aiProperties;
     private final StorageService storageService;
     private final ObjectMapper objectMapper = new ObjectMapper();
     /** 无认证头的裸客户端，用于向预签名对象存储地址 PUT 文件。 */
     private final RestClient presignedUploadClient;
 
     public GeeknowClient(AiProperties aiProperties, StorageService storageService) {
-        this.aiProperties = aiProperties;
         this.storageService = storageService;
 
         AiProperties.Geeknow config = aiProperties.getGeeknow();
@@ -203,84 +201,6 @@ public class GeeknowClient {
             throw new BusinessException(ResultCode.AI_SERVICE_ERROR, "GeekNow图片上传失败: " + e.getMessage(), e);
         }
         return presign.data().publicUrl();
-    }
-
-    public TextApiResponse generateText(
-            String prompt,
-            String model,
-            Integer maxTokens,
-            Double temperature,
-            Double topP
-    ) {
-        if (isDeepSeekTextModel(model)) {
-            return generateTextWithClient(
-                    providerClient(aiProperties.getDeepseek().getBaseUrl(), aiProperties.getDeepseek().getApiKey(), "DeepSeek"),
-                    prompt, model, maxTokens, temperature, topP, "DeepSeek"
-            );
-        }
-        if (isAgnesTextModel(model)) {
-            return generateTextWithClient(
-                    providerClient(aiProperties.getAgnes().getBaseUrl(), aiProperties.getAgnes().getApiKey(), "Agnes"),
-                    prompt, model, maxTokens, temperature, topP, "Agnes"
-            );
-        }
-        return executeWithFailover(
-                client -> generateTextWithClient(client, prompt, model, maxTokens, temperature, topP, "GeekNow"),
-                "文本生成"
-        );
-    }
-
-    private TextApiResponse generateTextWithClient(
-            RestClient client,
-            String prompt,
-            String model,
-            Integer maxTokens,
-            Double temperature,
-            Double topP,
-            String provider
-    ) {
-        Map<String, Object> requestBody = new HashMap<>();
-        requestBody.put("model", model);
-        requestBody.put("messages", List.of(
-                Map.of("role", "system", "content", "你是一个专业的AI写作助手。请始终使用中文回复用户的问题。"),
-                Map.of("role", "user", "content", prompt)
-        ));
-        requestBody.put("max_tokens", maxTokens);
-        requestBody.put("temperature", temperature);
-        requestBody.put("top_p", topP);
-
-        if ("DeepSeek".equals(provider) && Boolean.TRUE.equals(aiProperties.getDeepseek().getThinkingEnabled())) {
-            requestBody.put("reasoning_effort", aiProperties.getDeepseek().getReasoningEffort());
-            requestBody.put("thinking", Map.of("type", "enabled"));
-            requestBody.remove("temperature");
-            requestBody.remove("top_p");
-        }
-
-        try {
-            TextApiResponse response = client.post()
-                    .uri("/v1/chat/completions")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(requestBody)
-                    .retrieve()
-                    .onStatus(HttpStatusCode::isError, (request, httpResponse) -> {
-                        String body = new String(httpResponse.getBody().readAllBytes());
-                        if ("GeekNow".equals(provider)) {
-                            throwProviderStatus(provider + "文本生成失败", httpResponse.getStatusCode(), body);
-                        }
-                        throw providerError(provider + "文本生成失败", body);
-                    })
-                    .body(TextApiResponse.class);
-            if (response == null || response.choices() == null || response.choices().isEmpty()) {
-                throw new BusinessException(ResultCode.AI_SERVICE_ERROR, provider + "文本生成返回空结果");
-            }
-            return response;
-        } catch (RetryableGeeknowException | RestClientException e) {
-            throw e;
-        } catch (BusinessException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new BusinessException(ResultCode.AI_SERVICE_ERROR, provider + "文本生成调用失败: " + e.getMessage(), e);
-        }
     }
 
     public ImageApiResponse generateImage(
@@ -845,21 +765,6 @@ public class GeeknowClient {
         throw providerError(prefix, body);
     }
 
-    private RestClient providerClient(String baseUrl, String apiKey, String providerName) {
-        if (!hasText(apiKey)) {
-            throw new BusinessException(ResultCode.AI_SERVICE_ERROR, providerName + " API Key未配置");
-        }
-        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-        requestFactory.setConnectTimeout(Duration.ofSeconds(30));
-        requestFactory.setReadTimeout(Duration.ofSeconds(180));
-        return RestClient.builder()
-                .baseUrl(baseUrl)
-                .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + apiKey)
-                .requestFactory(requestFactory)
-                .messageConverters(GeeknowClient::relaxJsonContentTypes)
-                .build();
-    }
-
     private BusinessException providerError(String prefix, String body) {
         return new BusinessException(ResultCode.AI_SERVICE_ERROR, prefix + ": " + extractErrorMessage(body));
     }
@@ -880,15 +785,6 @@ public class GeeknowClient {
             log.debug("GeekNow error response is not JSON: {}", body);
         }
         return body;
-    }
-
-    private boolean isDeepSeekTextModel(String model) {
-        return "deepseek-v4-flash".equals(model) || "deepseek-v4-pro".equals(model);
-    }
-
-    private boolean isAgnesTextModel(String model) {
-        String configured = aiProperties.getAgnes().getChatModel();
-        return "agnes-2.0-flash".equals(model) || (configured != null && configured.equals(model));
     }
 
     private boolean isTransientTransportFailure(Throwable error) {
@@ -946,20 +842,6 @@ public class GeeknowClient {
         private RetryableGeeknowException(String message) {
             super(message);
         }
-    }
-
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    public record TextApiResponse(String id, List<Choice> choices, Usage usage, String model) {
-        @JsonIgnoreProperties(ignoreUnknown = true)
-        public record Choice(Message message, @JsonProperty("finish_reason") String finishReason) {}
-        @JsonIgnoreProperties(ignoreUnknown = true)
-        public record Message(String role, String content) {}
-        @JsonIgnoreProperties(ignoreUnknown = true)
-        public record Usage(
-                @JsonProperty("prompt_tokens") Integer promptTokens,
-                @JsonProperty("completion_tokens") Integer completionTokens,
-                @JsonProperty("total_tokens") Integer totalTokens
-        ) {}
     }
 
     public record ImageApiResponse(List<ImageData> data, String model) {

@@ -56,16 +56,6 @@ public class AiProperties {
     private Video video = new Video();
 
     /**
-     * DeepSeek模型服务配置
-     */
-    private DeepSeek deepseek = new DeepSeek();
-
-    /**
-     * Agnes模型服务配置
-     */
-    private Agnes agnes = new Agnes();
-
-    /**
      * Geeknow 默认 provider 配置类
      */
     @Data
@@ -109,7 +99,7 @@ public class AiProperties {
         /**
          * 默认模型
          */
-        private String model = "gemini-3.5-flash";
+        private String model = "deepseek-flash";
 
         /**
          * 最大token数
@@ -275,52 +265,6 @@ public class AiProperties {
         }
     }
 
-    /**
-     * DeepSeek服务配置类
-     */
-    @Data
-    public static class DeepSeek {
-        /**
-         * OpenAI兼容API基础URL
-         */
-        private String baseUrl = "https://api.deepseek.com";
-
-        /**
-         * API密钥
-         */
-        private String apiKey;
-
-        /**
-         * 是否启用思考模式
-         */
-        private Boolean thinkingEnabled = true;
-
-        /**
-         * 思考强度: high/max
-         */
-        private String reasoningEffort = "high";
-    }
-
-    /**
-     * Agnes服务配置类
-     */
-    @Data
-    public static class Agnes {
-        /**
-         * API基础URL
-         */
-        private String baseUrl = "https://apihub.agnes-ai.com";
-
-        /**
-         * API密钥
-         */
-        private String apiKey;
-
-        /**
-         * 文本/多模态模型名
-         */
-        private String chatModel = "agnes-2.0-flash";
-
-    }
 }
+
 // {{END_MODIFICATIONS}}

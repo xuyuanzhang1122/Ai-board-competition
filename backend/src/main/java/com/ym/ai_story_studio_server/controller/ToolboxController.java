@@ -123,7 +123,7 @@ public class ToolboxController {
      *     "jobId": null,
      *     "status": "SUCCEEDED",
      *     "type": "TEXT",
-     *     "model": "gemini-3.5-flash",
+     *     "model": "deepseek-flash",
      *     "text": "在2157年的新上海...",
      *     "resultUrl": null,
      *     "aspectRatio": null,
@@ -270,7 +270,7 @@ public class ToolboxController {
      *       {
      *         "id": 123,
      *         "type": "TEXT",
-     *         "model": "gemini-3.5-flash",
+     *         "model": "deepseek-flash",
      *         "prompt": "写一个科幻故事",
      *         "aspectRatio": null,
      *         "resultContent": "在2157年...",

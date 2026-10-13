@@ -1,6 +1,7 @@
 package com.ym.ai_story_studio_server.service;
 
-import com.ym.ai_story_studio_server.client.GeeknowClient;
+import com.ym.ai_story_studio_server.provider.TextGenerationProvider;
+import com.ym.ai_story_studio_server.provider.TextGenerationResult;
 import com.ym.ai_story_studio_server.common.ResultCode;
 import com.ym.ai_story_studio_server.config.AiProperties;
 import com.ym.ai_story_studio_server.dto.ai.TextGenerateRequest;
@@ -33,7 +34,7 @@ import java.util.Map;
  *
  * <p><strong>支持的模型:</strong>
  * <ul>
- *   <li>gemini-3.5-flash - Google Gemini大语言模型(默认)</li>
+ *   <li>DeepSeek / MiMo 官方文本模型；供应商需显式启用</li>
  * </ul>
  *
  * <p><strong>参数说明:</strong>
@@ -73,7 +74,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AiTextService {
 
-    private final GeeknowClient geeknowClient;
+    private final TextGenerationProvider textProvider;
     private final ChargingService chargingService;
     private final JobMapper jobMapper;
     private final AiProperties aiProperties;
@@ -95,6 +96,11 @@ public class AiTextService {
         // 1. 应用默认配置
         AiProperties.Text textConfig = aiProperties.getText();
         String model = request.model() != null ? request.model() : textConfig.getModel();
+        textProvider.validateModelConfiguration(model);
+
+        textProvider.validateRequest(request.prompt(), model, textConfig.getMaxTokens(),
+                request.temperature() != null ? request.temperature() : textConfig.getTemperature(),
+                request.topP() != null ? request.topP() : textConfig.getTopP());
 
         // 2. 创建任务记录
         Job job = createJob(userId, request.projectId(), model, request.prompt());
@@ -131,10 +137,12 @@ public class AiTextService {
 
             // 应用默认配置
             AiProperties.Text textConfig = aiProperties.getText();
-            String model = request.model() != null ? request.model() : textConfig.getModel();
+            String model = objectMapper.readTree(job.getMetaJson()).path("model").asText(null);
+            textProvider.validateModelConfiguration(model);
             Integer maxTokens = textConfig.getMaxTokens();
             Double temperature = request.temperature() != null ? request.temperature() : textConfig.getTemperature();
             Double topP = request.topP() != null ? request.topP() : textConfig.getTopP();
+            textProvider.validateRequest(request.prompt(), model, maxTokens, temperature, topP);
 
             log.info("开始异步生成文本 - jobId: {}", jobId);
 
@@ -160,7 +168,7 @@ public class AiTextService {
                     jobId, chargingResult.getTotalCost(), chargingResult.getBalanceAfter());
 
             // 步骤2: 调用当前文本 provider
-            GeeknowClient.TextApiResponse apiResponse = geeknowClient.generateText(
+            TextGenerationResult apiResponse = textProvider.generateText(
                     request.prompt(),
                     model,
                     maxTokens,
@@ -169,20 +177,14 @@ public class AiTextService {
             );
 
             // 提取生成的文本
-            String generatedText = apiResponse.choices() == null || apiResponse.choices().isEmpty()
-                    ? ""
-                    : apiResponse.choices().get(0).message().content();
+            String generatedText = apiResponse.text();
 
-            // 处理token使用量
-            Integer tokensUsed = 0;
-            if (apiResponse.usage() != null && apiResponse.usage().totalTokens() != null) {
-                tokensUsed = apiResponse.usage().totalTokens();
-            }
+            Integer tokensUsed = apiResponse.tokensUsed() == null ? 0 : apiResponse.tokensUsed();
 
             log.info("文本生成成功 - jobId: {}, tokensUsed: {}", jobId, tokensUsed);
 
             // ✅ 步骤3: 更新任务状态为成功
-            updateJobSuccess(job, model, request.prompt(), generatedText, tokensUsed);
+            updateJobSuccess(job, model, request.prompt(), generatedText, tokensUsed, apiResponse);
 
             log.info("异步文本生成完成 - jobId: {}, cost: {}", jobId, chargingResult.getTotalCost());
 
@@ -243,10 +245,12 @@ public class AiTextService {
         // 1. 应用默认配置
         AiProperties.Text textConfig = aiProperties.getText();
         String model = request.model() != null ? request.model() : textConfig.getModel();
+        textProvider.validateModelConfiguration(model);
         // ✅ maxTokens改为系统内置,固定使用配置文件最大值,前端不再传入
         Integer maxTokens = textConfig.getMaxTokens();
         Double temperature = request.temperature() != null ? request.temperature() : textConfig.getTemperature();
         Double topP = request.topP() != null ? request.topP() : textConfig.getTopP();
+        textProvider.validateRequest(request.prompt(), model, maxTokens, temperature, topP);
 
         log.debug("Applied config - model: {}, maxTokens: {}, temperature: {}, topP: {}",
                 model, maxTokens, temperature, topP);
@@ -279,8 +283,8 @@ public class AiTextService {
                     job.getId(), chargingResult.getTotalCost(), chargingResult.getBalanceAfter());
 
             // 4. 调用当前文本 provider
-            log.debug("Calling GeeknowClient.generateText...");
-            GeeknowClient.TextApiResponse apiResponse = geeknowClient.generateText(
+            log.debug("Calling configured text provider");
+            TextGenerationResult apiResponse = textProvider.generateText(
                     request.prompt(),
                     model,
                     maxTokens,
@@ -288,40 +292,16 @@ public class AiTextService {
                     topP
             );
 
-            // 调试：打印完整API响应用于诊断
-            log.debug("API Response - id: {}, model: {}, usage: {}, choices: {}",
-                    apiResponse.id(), apiResponse.model(), apiResponse.usage(), apiResponse.choices());
-
             // 提取生成的文本
-            String generatedText = apiResponse.choices() == null || apiResponse.choices().isEmpty()
-                    ? ""
-                    : apiResponse.choices().get(0).message().content();
+            String generatedText = apiResponse.text();
 
-            // 处理token使用量（仅用于日志和返回，不影响计费）
-            Integer tokensUsed = 0;
-            if (apiResponse.usage() != null && apiResponse.usage().totalTokens() != null) {
-                tokensUsed = apiResponse.usage().totalTokens();
-            } else if (apiResponse.usage() != null) {
-                // 尝试使用promptTokens + completionTokens
-                Integer pt = apiResponse.usage().promptTokens();
-                Integer ct = apiResponse.usage().completionTokens();
-                if (pt != null && ct != null) {
-                    tokensUsed = pt + ct;
-                }
-            }
-
-            // 如果无法获取实际token数,使用0作为占位符(不影响计费)
-            if (tokensUsed == 0 || tokensUsed == null) {
-                log.warn("Unable to get actual token usage from API, setting to 0 for logging. usage={}",
-                        apiResponse.usage());
-                tokensUsed = 0;
-            }
+            Integer tokensUsed = apiResponse.tokensUsed() == null ? 0 : apiResponse.tokensUsed();
 
             log.info("Text generation succeeded - jobId: {}, tokensUsed: {}, textLength: {}",
                     job.getId(), tokensUsed, generatedText.length());
 
             // 5. 更新任务状态为成功 (✅ 修复: 传入 model, prompt, text)
-            updateJobSuccess(job, model, request.prompt(), generatedText, tokensUsed);
+            updateJobSuccess(job, model, request.prompt(), generatedText, tokensUsed, apiResponse);
 
             // 6. 返回响应
             return new TextGenerateResponse(
@@ -386,7 +366,7 @@ public class AiTextService {
      * @param text 生成的文本内容
      * @param tokensUsed 使用的token数
      */
-    private void updateJobSuccess(Job job, String model, String prompt, String text, Integer tokensUsed) {
+    private void updateJobSuccess(Job job, String model, String prompt, String text, Integer tokensUsed, TextGenerationResult result) {
         job.setStatus("SUCCEEDED");
         job.setProgress(100);
         job.setDoneItems(1);
@@ -398,6 +378,10 @@ public class AiTextService {
             metaData.put("prompt", prompt);
             metaData.put("text", text);
             metaData.put("tokensUsed", tokensUsed);
+            metaData.put("usageKnown", result.tokensUsed() != null);
+            metaData.put("provider", result.provider());
+            metaData.put("upstreamModel", result.model());
+            metaData.put("providerRequestId", result.requestId());
             job.setMetaJson(objectMapper.writeValueAsString(metaData));
         } catch (Exception e) {
             log.error("Failed to serialize meta_json", e);

@@ -2,7 +2,8 @@ package com.ym.ai_story_studio_server.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import com.ym.ai_story_studio_server.client.GeeknowClient;
+import com.ym.ai_story_studio_server.provider.TextGenerationProvider;
+import com.ym.ai_story_studio_server.provider.TextGenerationResult;
 import com.ym.ai_story_studio_server.config.AiProperties;
 import com.ym.ai_story_studio_server.dto.ai.AiParseScriptResult;
 import com.ym.ai_story_studio_server.exception.BusinessException;
@@ -59,7 +60,7 @@ public class ShotServiceImpl implements ShotService {
     private final SceneLibraryMapper sceneLibraryMapper;
     private final AssetMapper assetMapper;
     private final AssetVersionMapper assetVersionMapper;
-    private final GeeknowClient geeknowClient;
+    private final TextGenerationProvider textProvider;
     private final AiProperties aiProperties;
     private final JobMapper jobMapper;
     private final JobItemMapper jobItemMapper;
@@ -505,7 +506,7 @@ public class ShotServiceImpl implements ShotService {
 
         // 调用AI生成
         AiProperties.Text textConfig = aiProperties.getText();
-        GeeknowClient.TextApiResponse response = geeknowClient.generateText(
+        TextGenerationResult response = textProvider.generateText(
                 prompt,
                 textConfig.getModel(),
                 textConfig.getMaxTokens(),
@@ -514,9 +515,7 @@ public class ShotServiceImpl implements ShotService {
         );
 
         // 提取生成的文本
-        String generatedText = response.choices() == null || response.choices().isEmpty()
-                ? "{}"
-                : response.choices().get(0).message().content();
+        String generatedText = response.text();
 
         log.debug("AI解析结果: {}", generatedText);
         
@@ -742,7 +741,7 @@ public class ShotServiceImpl implements ShotService {
 
         // 调用AI生成
         AiProperties.Text textConfig = aiProperties.getText();
-        GeeknowClient.TextApiResponse response = geeknowClient.generateText(
+        TextGenerationResult response = textProvider.generateText(
                 prompt,
                 textConfig.getModel(),
                 textConfig.getMaxTokens(),
@@ -751,9 +750,7 @@ public class ShotServiceImpl implements ShotService {
         );
 
         // 提取生成的文本
-        String generatedText = response.choices() == null || response.choices().isEmpty()
-                ? ""
-                : response.choices().get(0).message().content();
+        String generatedText = response.text();
 
         log.debug("AI解析结果: {}", generatedText);
 

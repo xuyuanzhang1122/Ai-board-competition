@@ -96,7 +96,7 @@ public class GenerateController {
      *   "data": {
      *     "text": "在2157年的新上海...",
      *     "tokensUsed": 1523,
-     *     "model": "gemini-3.5-flash",
+     *     "model": "deepseek-flash",
      *     "costPoints": 152
      *   },
      *   "timestamp": 1640000000000
