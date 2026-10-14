@@ -64,12 +64,9 @@ public class PaymentController {
      */
     @PostMapping("/orders")
     public Result<NativeOrderVO> createOrder(@Valid @RequestBody CreateNativeOrderRequest request) {
-        Long userId = UserContext.getUserId();
-        log.info("创建支付订单请求: userId={}, request={}", userId, request);
-
-        NativeOrderVO orderVO = paymentService.createNativeOrder(userId, request);
-
-        return Result.success("订单创建成功", orderVO);
+        throw new com.ym.ai_story_studio_server.exception.BusinessException(
+                com.ym.ai_story_studio_server.common.ResultCode.CONFIG_ERROR,
+                "参赛展示版免费使用，不开放充值");
     }
 
     /**
@@ -181,9 +178,7 @@ public class PaymentController {
      */
     @GetMapping("/products")
     public Result<List<RechargeProductVO>> getProducts() {
-        log.info("获取充值套餐列表");
-        List<RechargeProductVO> products = paymentService.getRechargeProducts();
-        return Result.success(products);
+        return Result.success(List.of());
     }
 
     /**
@@ -195,8 +190,6 @@ public class PaymentController {
      */
     @GetMapping("/exchange-rules")
     public Result<List<ExchangeRuleVO>> getExchangeRules() {
-        log.info("获取兑换规则列表");
-        List<ExchangeRuleVO> rules = paymentService.getExchangeRules();
-        return Result.success(rules);
+        return Result.success(List.of());
     }
 }

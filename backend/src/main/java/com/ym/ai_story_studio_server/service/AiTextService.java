@@ -58,12 +58,12 @@ import java.util.Objects;
  *
  * TextGenerateResponse response = aiTextService.generateText(request);
  * System.out.println("生成的文本: " + response.text());
- * System.out.println("消耗积分: " + response.costPoints());  // 固定扣费
+ * System.out.println("消耗积分: " + response.costPoints());  // 参赛版用户积分费用为零
  * </pre>
  *
  * <p><strong>计费规则:</strong>
  * <ul>
- *   <li>✅ <strong>固定扣费模式</strong>: 每次文本生成扣除固定积分,不按token数计费</li>
+ *   <li>✅ <strong>参赛免费模式</strong>: 用户积分费用为零，供应商用量单独记录</li>
  *   <li>费用从用户积分钱包扣除,具体单价由pricing_rules表配置</li>
  *   <li>quantity始终为1,表示"一次文本生成"</li>
  * </ul>
@@ -206,7 +206,7 @@ public class AiTextService {
      *
      * <p><strong>计费模式变更说明:</strong>
      * <ul>
-     *   <li>✅ <strong>新模式(固定扣费)</strong>: 每次文本生成扣除固定积分,quantity=1</li>
+     *   <li>✅ <strong>参赛免费模式</strong>: 不扣除用户积分，quantity=1 表示请求次数</li>
      *   <li>❌ <strong>旧模式(按token)</strong>: 按实际或估算token数计费,已废弃</li>
      * </ul>
      *
@@ -220,12 +220,12 @@ public class AiTextService {
      * <ul>
      *   <li>该方法使用@Transactional确保任务创建和计费的原子性</li>
      *   <li>如果API调用失败,任务状态会更新为FAILED</li>
-     *   <li>积分余额不足会抛出异常,不会创建任务</li>
+     *   <li>参赛版不扣除用户积分，供应商用量单独记录</li>
      * </ul>
      *
      * @param request 文本生成请求参数
      * @return 文本生成响应(包含生成的文本、消耗token数、费用等)
-     * @throws BusinessException 当API调用失败、余额不足或参数错误时抛出
+     * @throws BusinessException 当API调用失败或参数错误时抛出
      */
     @Transactional(rollbackFor = Exception.class)
     public TextGenerateResponse generateText(TextGenerateRequest request) {
@@ -252,8 +252,8 @@ public class AiTextService {
         log.info("Job created - jobId: {}, jobType: TEXT_GENERATION", job.getId());
 
         try {
-            // 3. 进行积分计费(预扣费) - ✅ 先扣费后生成
-            log.debug("Starting charging process (pre-charge, fixed pricing mode: quantity=1)...");
+            // 3. 应用参赛免费策略（用户积分费用为零）
+            log.debug("Applying competition free policy...");
             Map<String, Object> chargingMetaData = new HashMap<>();
             chargingMetaData.put("model", model);
             chargingMetaData.put("maxTokens", maxTokens);
@@ -266,13 +266,13 @@ public class AiTextService {
                             .jobId(job.getId())
                             .bizType("TEXT_GENERATION")
                             .modelCode(model)
-                            .quantity(1)  // ✅ 固定值1,表示"一次文本生成",实现固定扣费
+                            .quantity(1)  // 请求次数，不代表实际 token 用量
                             .metaData(chargingMetaData)
                             .build()
             );
 
-            log.info("Pre-charging completed - jobId: {}, cost: {} points (fixed pricing), balanceAfter: {}",
-                    job.getId(), chargingResult.getTotalCost(), chargingResult.getBalanceAfter());
+            log.info("Competition free policy applied - jobId: {}, userCostPoints: {}",
+                    job.getId(), chargingResult.getTotalCost());
 
             // 4. 调用当前文本 provider
             log.debug("Calling configured text provider");
