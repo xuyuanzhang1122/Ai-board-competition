@@ -30,7 +30,6 @@ export function HomePage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const fetchProfile = useUserStore((state) => state.fetchProfile)
-  const setPoints = useUserStore((state) => state.setPoints)
   const selectedFolderId = useHomeUiStore((state) => state.selectedFolderId)
   const selectedFolderName = useHomeUiStore((state) => state.selectedFolderName)
   const clearFolderFilter = useHomeUiStore((state) => state.clearFolderFilter)
@@ -60,10 +59,6 @@ export function HomePage() {
     queryFn: homeApi.getFolders,
     queryKey: homeQueryKeys.folders,
   })
-  const walletQuery = useQuery({
-    queryFn: homeApi.getWallet,
-    queryKey: homeQueryKeys.wallet,
-  })
 
   const projects = projectsQuery.data?.records ?? EMPTY_PROJECTS
   const folders = foldersQuery.data ?? EMPTY_FOLDERS
@@ -73,10 +68,6 @@ export function HomePage() {
       console.error('[HomePage] Failed to fetch user profile:', error)
     })
   }, [fetchProfile])
-
-  useEffect(() => {
-    if (walletQuery.data) setPoints(walletQuery.data.balance)
-  }, [setPoints, walletQuery.data])
 
   useEffect(() => resetHomeUi, [resetHomeUi])
 

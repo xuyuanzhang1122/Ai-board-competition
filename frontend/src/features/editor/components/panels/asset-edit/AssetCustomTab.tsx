@@ -4,7 +4,6 @@ import type React from 'react'
 import { useRef, useState } from 'react'
 
 import {
-  calculateEstimatedCost,
   getModelAspectRatios,
 } from '@/features/toolbox/constants/toolbox-models'
 import { modelOptionLabel } from '@/shared/components/ModelProviderIcon'
@@ -61,8 +60,6 @@ export function AssetCustomTab({
     label: ratio,
     value: ratio,
   }))
-
-  const estimatedCost = calculateEstimatedCost('IMAGE', modelCode)
 
   const canGenerate =
     !isGenerating &&
@@ -163,7 +160,7 @@ export function AssetCustomTab({
             />
           </div>
           <span className="text-xs text-slate-400">
-            预估消耗 {estimatedCost} 积分
+            参赛免费
           </span>
         </div>
       </div>

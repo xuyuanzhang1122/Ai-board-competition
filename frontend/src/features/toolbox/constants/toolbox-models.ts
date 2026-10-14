@@ -17,12 +17,12 @@ export interface SelectOption {
 }
 
 export interface ImageCapability extends ModelCapability {
-  aspectRatios: string[]
-  costPerItem: number
   /** 展示用尺寸标签(方图·2880x2880等)，按aspectRatios的字面值查找；未配置时直接显示字面值。 */
   aspectRatioLabels?: Record<string, string>
+  aspectRatios: string[]
   /** 该模型支持的背景选项；未配置时不展示背景选择器。 */
   backgrounds?: SelectOption[]
+  costPerItem: number
   /** 单次最多生成张数；未配置或为1时不展示张数选择器。 */
   maxCount?: number
   /** 该模型支持的输出格式；未配置时不展示输出格式选择器。 */
@@ -58,31 +58,9 @@ export const DEFAULT_VIDEO_CAPABILITY: VideoCapability = {
 }
 
 export const TEXT_CAPABILITY_BY_CODE: Record<string, TextCapability> = {
-  'agnes-2.0-flash': {
-    costPerToken: 0,
-    description: '支持文本与图像理解的多模态模型',
-    name: 'Agnes 2.0 Flash',
-  },
-  'deepseek-v4-flash': {
-    costPerToken: 0.001,
-    description: 'DeepSeek 快速文本模型',
-    name: 'DeepSeek V4 Flash',
-  },
-  'deepseek-v4-pro': {
-    costPerToken: 0.003,
-    description: 'DeepSeek 高质量推理文本模型',
-    name: 'DeepSeek V4 Pro',
-  },
-  'gemini-3.5-flash': {
-    costPerToken: 0.002,
-    description: '快速文本生成',
-    name: 'Gemini 3.5 Flash',
-  },
-  'gpt-4o': {
-    costPerToken: 0.003,
-    description: 'OpenAI GPT-4o 多模态模型',
-    name: 'GPT-4o',
-  },
+  'deepseek-flash': { costPerToken: 0, description: 'DeepSeek 文本生成', name: 'DeepSeek Flash' },
+  'deepseek-v4-pro': { costPerToken: 0, description: 'DeepSeek 文本生成', name: 'DeepSeek V4 Pro' },
+  'mimo-v2.6-pro': { costPerToken: 0, description: 'MiMo 文本生成', name: 'MiMo V2.6 Pro' },
 }
 
 export const IMAGE_CAPABILITY_BY_CODE: Record<string, ImageCapability> = {
@@ -260,32 +238,12 @@ function getCapability(
 /**
  * 根据类型和模型计算预估消耗
  */
+// 用户积分费用固定为零；供应商人民币成本不在浏览器中估算。
 export function calculateEstimatedCost(
-  type: 'TEXT' | 'IMAGE' | 'VIDEO',
-  modelCode: string,
-  options?: {
-    promptLength?: number // 文本长度(字符)
-    duration?: number // 视频时长(秒)
-  },
+  _type: 'TEXT' | 'IMAGE' | 'VIDEO',
+  _modelCode: string,
+  _options?: { promptLength?: number; duration?: number },
 ): number {
-  if (type === 'TEXT') {
-    const model = getCapability(type, modelCode) as TextCapability
-    // 估算: 1 个中文字符 ≈ 2 tokens
-    const estimatedTokens = (options?.promptLength || 100) * 2
-    return Math.ceil(estimatedTokens * model.costPerToken)
-  }
-
-  if (type === 'IMAGE') {
-    const model = getCapability(type, modelCode) as ImageCapability
-    return model.costPerItem
-  }
-
-  if (type === 'VIDEO') {
-    const model = getCapability(type, modelCode) as VideoCapability
-    const duration = options?.duration || 8
-    return duration * model.costPerSecond
-  }
-
   return 0
 }
 

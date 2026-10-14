@@ -18,8 +18,8 @@ import {
   getModelAspectRatios,
   getVideoDurations,
 } from '../constants/toolbox-models'
+import { resolveInputModel } from '../model-selection'
 import {
-  selectEstimatedCost,
   selectIsGenerating,
   type ToolboxInputType,
   useToolboxStore,
@@ -54,7 +54,6 @@ export function ChatComposer() {
   const updateInputType = useToolboxStore((state) => state.updateInputType)
   const generateWithConversation = useToolboxStore((state) => state.generateWithConversation)
   const isGenerating = useToolboxStore(selectIsGenerating)
-  const estimatedCost = useToolboxStore(selectEstimatedCost)
 
   const [referenceImageUrl, setReferenceImageUrl] = useState('')
   const [uploading, setUploading] = useState(false)
@@ -66,15 +65,13 @@ export function ChatComposer() {
     isError: modelsError,
     error: modelsErrorObj,
   } = useQuery({
-    queryKey: ['toolbox-models', currentInput.type],
+    queryKey: ['competition-toolbox-models-v1', currentInput.type],
     queryFn: () => toolboxApi.getModels(currentInput.type),
   })
 
   useEffect(() => {
-    if (modelsLoading || models.length === 0) return
-    const model = models.some((item) => item.code === currentInput.model)
-      ? currentInput.model
-      : models[0].code
+    if (modelsLoading) return
+    const model = resolveInputModel(currentInput.type, currentInput.model, models)
     const patch: Partial<typeof currentInput> = {}
     if (model !== currentInput.model) patch.model = model
     if (currentInput.type !== 'TEXT') {
@@ -125,8 +122,7 @@ export function ChatComposer() {
     currentInput.prompt.trim().length > 0 &&
     !isGenerating &&
     !modelsLoading &&
-    models.length > 0 &&
-    Boolean(currentInput.model)
+    models.some((model) => model.code === currentInput.model)
   const modelOptions = models.map((model) => ({
     label: modelOptionLabel(model),
     value: model.code,
@@ -326,8 +322,8 @@ export function ChatComposer() {
                 style={{ paddingInline: 0 }}
                 texts={{ send: '发送', stop: '生成中', warp: '换行' }}
                 rightAddons={
-                  <Tag color={estimatedCost > 0 ? 'blue' : 'default'}>
-                    预估 {estimatedCost} 积分
+                  <Tag color="default">
+                    参赛免费
                   </Tag>
                 }
                 onSend={() => void handleSend()}

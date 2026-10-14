@@ -3,7 +3,6 @@ import { Button, Input, Modal } from '@lobehub/ui'
 import {
   ChevronRight,
   CircleDollarSign,
-  Coins,
   Home,
   LogOut,
   Upload,
@@ -34,7 +33,6 @@ const NAV: {
 ]
 
 const MAX_AVATAR_SIZE = 5 * 1024 * 1024
-const DEVELOPER_GITHUB = 'https://github.com/xuyuanzhang1122?tab=repositories'
 
 export function MainLayout() {
   const navigate = useNavigate()
@@ -43,7 +41,6 @@ export function MainLayout() {
   const fetchProfile = useUserStore((state) => state.fetchProfile)
   const updateProfile = useUserStore((state) => state.updateProfile)
   const user = useUserStore((state) => state.user)
-  const points = useUserStore((state) => state.points)
   const [profileOpen, setProfileOpen] = useState(false)
   const [nickname, setNickname] = useState('')
   const [avatarUrl, setAvatarUrl] = useState('')
@@ -161,7 +158,7 @@ export function MainLayout() {
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold text-slate-800">{displayName}</p>
                 <p className="mt-0.5 flex items-center gap-1 text-[11px] text-amber-600">
-                  <Coins className="size-3" /> {points} 积分 · 点击编辑
+                  参赛免费 · 点击编辑
                 </p>
               </div>
               <ChevronRight className="size-4 text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-rose-400" />
@@ -175,15 +172,7 @@ export function MainLayout() {
             <LogOut className="size-3.5" /> 退出登录
           </button>
           <p className="mt-2 text-center text-[10px] text-slate-300">
-            © 2026 红鹦鹉漫剧 · 由 Xumy 开发 ·{' '}
-            <a
-              className="underline-offset-2 transition hover:text-rose-400 hover:underline"
-              href={DEVELOPER_GITHUB}
-              rel="noopener noreferrer"
-              target="_blank"
-            >
-              GitHub
-            </a>
+            你的不对我的队 · 参赛展示版
           </p>
         </div>
       </aside>

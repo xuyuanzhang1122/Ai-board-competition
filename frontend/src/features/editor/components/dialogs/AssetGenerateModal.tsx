@@ -1,9 +1,8 @@
 import { Button, InputNumber, Modal, Select } from '@lobehub/ui'
-import { Coins, Sparkles } from 'lucide-react'
+import { Sparkles } from 'lucide-react'
 import { useEffect, useReducer, useState } from 'react'
 
 import {
-  calculateEstimatedCost,
   getModelAspectRatios,
   getVideoDurations,
 } from '@/features/toolbox/constants/toolbox-models'
@@ -89,8 +88,6 @@ export function AssetGenerateModal({ onClose, request }: AssetGenerateModalProps
   }
 
   const label = request.assetType === 'video' ? '视频' : '分镜图'
-  const estimatedCost =
-    calculateEstimatedCost(modelType, form.model, { duration: form.duration }) * form.count
   const modelOptions = models.map((model) => ({
     label: modelOptionLabel(model),
     value: model.code,
@@ -196,10 +193,9 @@ export function AssetGenerateModal({ onClose, request }: AssetGenerateModalProps
         </div>
 
         <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
-          <span className="text-sm text-slate-500">预估消耗</span>
+          <span className="text-sm text-slate-500">使用方式</span>
           <span className="flex items-center gap-1.5 font-semibold text-slate-900">
-            <Coins className="size-4" />
-            {estimatedCost} 积分
+            参赛免费
           </span>
         </div>
 

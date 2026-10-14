@@ -40,20 +40,8 @@ export const router = createBrowserRouter([
               return { Component: ToolboxPage }
             },
           },
-          {
-            path: 'wallet',
-            lazy: async () => {
-              const { WalletPage } = await import('@/features/wallet/WalletPage')
-              return { Component: WalletPage }
-            },
-          },
-          {
-            path: 'recharge',
-            lazy: async () => {
-              const { RechargePage } = await import('@/features/recharge/RechargePage')
-              return { Component: RechargePage }
-            },
-          },
+          { path: 'wallet', element: <Navigate replace to="/home" /> },
+          { path: 'recharge', element: <Navigate replace to="/home" /> },
           { path: 'invite', element: <Placeholder phase="Phase 1" title="邀请" /> },
         ],
       },

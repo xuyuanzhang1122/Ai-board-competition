@@ -1,5 +1,7 @@
 import { create, type StoreApi, type UseBoundStore } from 'zustand'
 
+import { normalizeTextPreference } from '@/shared/constants/text-models'
+
 export interface ModelConfigData {
   characterImageModel: string
   languageModel: string
@@ -16,13 +18,13 @@ export interface ModelConfigActions {
 export type ModelConfigStore = ModelConfigData & ModelConfigActions
 export type ModelConfigStoreHook = UseBoundStore<StoreApi<ModelConfigStore>>
 
-const STORAGE_KEY = 'yuanmeng_model_config'
+const STORAGE_KEY = 'competition_model_config_v1'
 
-// 默认模型须取当前启用模型(对齐后端 application.yml 与 V22/V23/V31 白名单)。
-// 图片模型与后端 GeekNow 媒体模型白名单一致；视频模型走 sudashuiapi Seedance 2.0。
+// 不自动选择付费文本模型；用户从服务器当前可用目录选择。
+// 图片/视频默认值仍待媒体替换阶段迁移，不能据此宣称 M1 完成。
 export const DEFAULT_MODEL_CONFIG: ModelConfigData = {
   characterImageModel: 'gemini-3-pro-image-preview',
-  languageModel: 'gemini-3.5-flash',
+  languageModel: '',
   sceneImageModel: 'gemini-3-pro-image-preview',
   shotImageModel: 'gemini-3-pro-image-preview',
   videoModel: 'sd-api-2-fast-720p',
@@ -42,7 +44,11 @@ const loadConfig = (): ModelConfigData => {
     const stored = localStorage.getItem(STORAGE_KEY)
     if (stored) {
       const parsed = JSON.parse(stored) as Partial<ModelConfigData>
-      return { ...DEFAULT_MODEL_CONFIG, ...parsed }
+      return {
+        ...DEFAULT_MODEL_CONFIG,
+        ...parsed,
+        languageModel: normalizeTextPreference(parsed.languageModel),
+      }
     }
   } catch {
     // Ignore malformed local storage and fall back to defaults.
@@ -65,6 +71,13 @@ export const createModelConfigStore = (
   create<ModelConfigStore>((set) => ({
     ...loadConfig(),
     ...initialOverrides,
+    ...(initialOverrides.languageModel !== undefined
+      ? {
+          languageModel: normalizeTextPreference(
+            initialOverrides.languageModel,
+          ),
+        }
+      : {}),
 
     resetToDefault() {
       set(() => {
@@ -75,7 +88,13 @@ export const createModelConfigStore = (
 
     updateConfig(config) {
       set((state) => {
-        const next = { ...state, ...config }
+        const next = {
+          ...state,
+          ...config,
+          languageModel: normalizeTextPreference(
+            config.languageModel ?? state.languageModel,
+          ),
+        }
         saveConfig(toConfig(next))
         return next
       })

@@ -22,7 +22,6 @@ export interface DescriptionParserDeps {
     options?: { model?: string },
   ) => Promise<{ text: string }>
   getCachedCharacterDescription: (name: string) => string | undefined
-  sleep: (ms: number) => Promise<void>
 }
 
 export const assetTypeLabel = (assetType: EditableAssetType): string => {
@@ -105,30 +104,23 @@ export const runDescriptionParse = async (
 
   const prompt = buildParsePrompt(assetType, currentName, currentScriptText)
 
-  let parseError = false
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+  // Let immediate effect cleanup cancel this dispatch before React replays setup in development.
+  await Promise.resolve()
+  if (signal?.aborted) {
+    return { description: defaultDescription(assetName, assetType), parseError: false }
+  }
+  try {
+    const { text } = await deps.generateText(prompt, projectId, { model: input.languageModel })
     if (signal?.aborted) {
       return { description: defaultDescription(assetName, assetType), parseError: false }
     }
-    try {
-      const { text } = await deps.generateText(prompt, projectId, {
-        model: input.languageModel,
-      })
-      if (signal?.aborted) {
-        return { description: defaultDescription(assetName, assetType), parseError: false }
-      }
-      const description = text.trim()
-      if (assetType === 'character') {
-        deps.cacheCharacterDescription(currentName, description)
-      }
-      return { description, parseError: false }
-    } catch {
-      parseError = true
-      if (attempt < 2) await deps.sleep(1000)
-    }
+    const description = text.trim()
+    if (assetType === 'character') deps.cacheCharacterDescription(currentName, description)
+    return { description, parseError: false }
+  } catch {
+    // A failed HTTP response does not prove the supplier rejected the request. Never replay automatically.
+    return { description: defaultDescription(assetName, assetType), parseError: true }
   }
-
-  return { description: defaultDescription(assetName, assetType), parseError }
 }
 
 const createDefaultDeps = (): DescriptionParserDeps => ({
@@ -139,7 +131,6 @@ const createDefaultDeps = (): DescriptionParserDeps => ({
     textGenerationApi.generateText(prompt, projectId, options),
   getCachedCharacterDescription: (name) =>
     useEditorStore.getState().characterDescriptionCache.get(name),
-  sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
 })
 
 export function useAssetDescriptionParser(

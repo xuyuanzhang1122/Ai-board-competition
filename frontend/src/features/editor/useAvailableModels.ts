@@ -7,7 +7,7 @@ import { modelApi } from './model-api'
 export function useAvailableModels(type: ModelType) {
   const query = useQuery({
     queryFn: () => modelApi.getModels(type),
-    queryKey: ['editor-models', type],
+    queryKey: ['competition-editor-models-v1', type],
     staleTime: 5 * 60 * 1000,
   })
   return {

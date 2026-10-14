@@ -95,12 +95,27 @@ const makeLocalRecord = (
 })
 
 describe('asset description parser', () => {
+  it('does not dispatch a canceled effect when StrictMode immediately replays setup', async () => {
+    const deps: DescriptionParserDeps = {
+      cacheCharacterDescription: vi.fn(),
+      generateText: vi.fn().mockResolvedValue({ text: '场景描述' }),
+      getCachedCharacterDescription: vi.fn(),
+    }
+    const input: DescriptionParserInput = {
+      assetName: '蓬莱阁', assetType: 'scene', projectId: 1, scriptText: '海边的阁楼',
+    }
+    const firstEffect = new AbortController()
+    const first = runDescriptionParse(input, deps, firstEffect.signal)
+    firstEffect.abort()
+    const second = runDescriptionParse(input, deps, new AbortController().signal)
+    await Promise.all([first, second])
+    expect(deps.generateText).toHaveBeenCalledTimes(1)
+  })
   it('returns existing description directly without calling the API', async () => {
     const deps: DescriptionParserDeps = {
       cacheCharacterDescription: vi.fn(),
       generateText: vi.fn(),
       getCachedCharacterDescription: vi.fn(),
-      sleep: vi.fn(),
     }
     const input: DescriptionParserInput = {
       assetName: '林默',
@@ -123,7 +138,6 @@ describe('asset description parser', () => {
       cacheCharacterDescription: vi.fn(),
       generateText: vi.fn(),
       getCachedCharacterDescription: vi.fn(),
-      sleep: vi.fn(),
     }
     const input: DescriptionParserInput = {
       assetName: '玉佩',
@@ -145,7 +159,6 @@ describe('asset description parser', () => {
       cacheCharacterDescription: vi.fn(),
       generateText: vi.fn(),
       getCachedCharacterDescription: vi.fn().mockReturnValue('缓存外貌'),
-      sleep: vi.fn(),
     }
     const input: DescriptionParserInput = {
       assetName: '林默',
@@ -167,7 +180,6 @@ describe('asset description parser', () => {
       cacheCharacterDescription: vi.fn(),
       generateText: vi.fn().mockResolvedValue({ text: '  解析结果  ' }),
       getCachedCharacterDescription: vi.fn().mockReturnValue(undefined),
-      sleep: vi.fn(),
     }
     const input: DescriptionParserInput = {
       assetName: '林默',
@@ -183,13 +195,11 @@ describe('asset description parser', () => {
     expect(deps.cacheCharacterDescription).toHaveBeenCalledWith('林默', '解析结果')
   })
 
-  it('retries twice on failure and falls back to the default description', async () => {
-    const sleep = vi.fn().mockResolvedValue(undefined)
+  it('does not replay a failed provider request and offers a fallback description', async () => {
     const deps: DescriptionParserDeps = {
       cacheCharacterDescription: vi.fn(),
       generateText: vi.fn().mockRejectedValue(new Error('provider down')),
       getCachedCharacterDescription: vi.fn().mockReturnValue(undefined),
-      sleep,
     }
     const input: DescriptionParserInput = {
       assetName: '林默',
@@ -201,9 +211,7 @@ describe('asset description parser', () => {
 
     const result = await runDescriptionParse(input, deps)
 
-    expect(deps.generateText).toHaveBeenCalledTimes(3)
-    expect(sleep).toHaveBeenCalledTimes(2)
-    expect(sleep).toHaveBeenCalledWith(1000)
+    expect(deps.generateText).toHaveBeenCalledTimes(1)
     expect(result).toEqual({
       description: '林默，一个角色',
       parseError: true,
@@ -215,7 +223,6 @@ describe('asset description parser', () => {
       cacheCharacterDescription: vi.fn(),
       generateText: vi.fn(),
       getCachedCharacterDescription: vi.fn(),
-      sleep: vi.fn(),
     }
     const input: DescriptionParserInput = {
       assetName: '林默',
@@ -238,7 +245,6 @@ describe('asset description parser', () => {
         () => new Promise<{ text: string }>((resolve) => setTimeout(() => resolve({ text: 'late' }), 100)),
       ),
       getCachedCharacterDescription: vi.fn().mockReturnValue(undefined),
-      sleep: vi.fn(),
     }
     const input: DescriptionParserInput = {
       assetName: '林默',

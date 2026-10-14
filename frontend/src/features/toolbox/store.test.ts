@@ -91,20 +91,20 @@ describe('toolbox store', () => {
     })
   })
 
-  it('calculates text and video estimated costs from the current input', () => {
+  it('keeps competition point estimates free for text and video', () => {
     useToolboxStore.getState().setCurrentInput({
       type: 'TEXT',
       model: 'gemini-3.5-flash',
       prompt: '字'.repeat(250),
     })
-    expect(selectEstimatedCost(useToolboxStore.getState())).toBe(1)
+    expect(selectEstimatedCost(useToolboxStore.getState())).toBe(0)
 
     useToolboxStore.getState().setCurrentInput({
       type: 'VIDEO',
       model: 'sd-api-2-fast-720p',
       duration: 10,
     })
-    expect(selectEstimatedCost(useToolboxStore.getState())).toBe(50)
+    expect(selectEstimatedCost(useToolboxStore.getState())).toBe(0)
   })
 
   it('adds a conversation, syncs the active session, and persists it', () => {

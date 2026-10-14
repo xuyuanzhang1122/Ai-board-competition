@@ -172,7 +172,7 @@ export function HistoryPanel({ onClose }: HistoryPanelProps) {
                     </div>
                     <div className="flex items-center justify-between text-xs text-slate-500">
                       <span>{new Date(job.createdAt).toLocaleString('zh-CN')}</span>
-                      <span>{job.costPoints == null ? '—' : `${job.costPoints} 积分`}</span>
+                      <span>{job.costPoints == null ? '—' : job.costPoints === 0 ? '参赛免费' : `历史费用 ${job.costPoints} 积分`}</span>
                     </div>
                     {job.errorMessage ? <p className="text-xs text-red-500">{job.errorMessage}</p> : null}
                     {url ? (

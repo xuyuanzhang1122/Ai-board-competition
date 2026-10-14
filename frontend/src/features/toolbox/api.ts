@@ -1,3 +1,4 @@
+import { modelApi } from '@/features/editor/model-api'
 import api from '@/shared/api/client'
 import type {
   JobVO,
@@ -68,9 +69,7 @@ export const toolboxApi = {
 
   getModels(type: 'TEXT' | 'IMAGE' | 'VIDEO'): Promise<AiModelVO[]> {
     const backendType = type === 'TEXT' ? 'LANGUAGE' : type
-    return api.get<never, AiModelVO[]>('/ai-models', {
-      params: { type: backendType },
-    })
+    return modelApi.getModels(backendType)
   },
 
   getSessions(): Promise<ToolboxSessionVO[]> {

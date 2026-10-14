@@ -1,8 +1,10 @@
 import api from '@/shared/api/client'
+import { isAvailableOfficialTextModel } from '@/shared/constants/text-models'
 import type { ModelType, ModelVO } from '@/shared/types/api'
 
 export const modelApi = {
-  getModels(type: ModelType): Promise<ModelVO[]> {
-    return api.get('/ai-models', { params: { type } })
+  async getModels(type: ModelType): Promise<ModelVO[]> {
+    const models = await api.get<never, ModelVO[]>('/ai-models', { params: { type } })
+    return type === 'LANGUAGE' ? models.filter(isAvailableOfficialTextModel) : models
   },
 }

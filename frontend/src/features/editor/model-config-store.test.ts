@@ -29,6 +29,32 @@ describe('model config store', () => {
     expect(useStore.getState()).toMatchObject(DEFAULT_MODEL_CONFIG)
   })
 
+  it('does not reuse the original project storage or silently choose a paid text model', () => {
+    localStorage.setItem(
+      'yuanmeng_model_config',
+      JSON.stringify({ languageModel: 'gemini-3.5-flash' }),
+    )
+    expect(createModelConfigStore().getState().languageModel).toBe('')
+    expect(localStorage.getItem('yuanmeng_model_config')).toContain(
+      'gemini-3.5-flash',
+    )
+  })
+
+  it('clears obsolete or malformed language preferences without changing media preferences', () => {
+    localStorage.setItem(
+      'competition_model_config_v1',
+      JSON.stringify({
+        languageModel: 'deepseek-v4-flash',
+        sceneImageModel: 'scene-custom',
+      }),
+    )
+    const state = createModelConfigStore().getState()
+    expect(state.languageModel).toBe('')
+    expect(state.sceneImageModel).toBe('scene-custom')
+    state.updateConfig({ languageModel: 'gemini-3.5-flash' })
+    expect(createModelConfigStore().getState().languageModel).toBe('')
+  })
+
   it('partial updateConfig changes only provided fields', () => {
     const useStore = createModelConfigStore()
     useStore.getState().updateConfig({ shotImageModel: 'custom-shot' })
@@ -40,18 +66,18 @@ describe('model config store', () => {
 
   it('persists changes to localStorage', () => {
     const useStore = createModelConfigStore()
-    useStore.getState().updateConfig({ languageModel: 'llama-3' })
+    useStore.getState().updateConfig({ languageModel: 'mimo-v2.6-pro' })
 
-    const raw = globalThis.localStorage?.getItem('yuanmeng_model_config')
+    const raw = globalThis.localStorage?.getItem('competition_model_config_v1')
     expect(raw).toBeTruthy()
     const parsed = JSON.parse(raw!) as ModelConfigData
-    expect(parsed.languageModel).toBe('llama-3')
+    expect(parsed.languageModel).toBe('mimo-v2.6-pro')
     expect(parsed.videoModel).toBe(DEFAULT_MODEL_CONFIG.videoModel)
   })
 
   it('loads persisted values on creation', () => {
     globalThis.localStorage?.setItem(
-      'yuanmeng_model_config',
+      'competition_model_config_v1',
       JSON.stringify({ sceneImageModel: 'scene-custom' }),
     )
 
@@ -68,7 +94,9 @@ describe('model config store', () => {
     const state = useStore.getState()
     expect(state.shotImageModel).toBe(DEFAULT_MODEL_CONFIG.shotImageModel)
 
-    const raw = globalThis.localStorage?.getItem('yuanmeng_model_config')
-    expect(JSON.parse(raw!).shotImageModel).toBe(DEFAULT_MODEL_CONFIG.shotImageModel)
+    const raw = globalThis.localStorage?.getItem('competition_model_config_v1')
+    expect(JSON.parse(raw!).shotImageModel).toBe(
+      DEFAULT_MODEL_CONFIG.shotImageModel,
+    )
   })
 })

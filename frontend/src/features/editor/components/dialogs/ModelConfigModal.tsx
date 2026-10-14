@@ -49,12 +49,11 @@ export function ModelConfigModal({ onClose, open }: ModelConfigModalProps) {
     // eslint-disable-next-line @eslint-react/hooks-extra/no-direct-set-state-in-use-effect
     setLocalValues(storeValues)
 
-    const shouldFetch = Object.values(options).some((list) => list.length === 0)
-    if (!shouldFetch) return
-
     let cancelled = false
     // eslint-disable-next-line @eslint-react/hooks-extra/no-direct-set-state-in-use-effect
     setLoading(true)
+    // eslint-disable-next-line @eslint-react/hooks-extra/no-direct-set-state-in-use-effect
+    setOptions(EMPTY_MODEL_OPTIONS)
     Promise.all([
       modelApi.getModels('LANGUAGE'),
       modelApi.getModels('IMAGE'),
@@ -67,6 +66,11 @@ export function ModelConfigModal({ onClose, open }: ModelConfigModalProps) {
           LANGUAGE: mapOptions(languageModels),
           VIDEO: mapOptions(videoModels),
         })
+        setLocalValues((previous) => ({
+          ...previous,
+          languageModel: languageModels.some((model) => model.code === previous.languageModel)
+            ? previous.languageModel : '',
+        }))
       })
       .catch((error) => {
         if (cancelled) return
@@ -79,9 +83,14 @@ export function ModelConfigModal({ onClose, open }: ModelConfigModalProps) {
     return () => {
       cancelled = true
     }
-  }, [open, storeValues, options])
+  }, [open, storeValues])
 
   const handleSave = () => {
+    if (loading) return
+    if (localValues.languageModel && !options.LANGUAGE.some((model) => model.value === localValues.languageModel)) {
+      defaultNotifier.error('语言模型已停用，请重新选择')
+      return
+    }
     updateConfig(localValues)
     defaultNotifier.success('模型配置已保存')
     onClose()
@@ -110,9 +119,10 @@ export function ModelConfigModal({ onClose, open }: ModelConfigModalProps) {
       <label className="mb-2 block text-sm font-medium text-slate-700">{label}</label>
       <Select
         className="w-full"
+        disabled={loading || modelOptions.length === 0}
         options={modelOptions}
-        placeholder="选择模型"
-        value={value}
+        placeholder={modelOptions.length === 0 ? '暂无可用模型' : '选择模型'}
+        value={modelOptions.some((option) => option.value === value) ? value : undefined}
         onChange={(next) => onChange(String(next))}
       />
     </div>
@@ -129,7 +139,7 @@ export function ModelConfigModal({ onClose, open }: ModelConfigModalProps) {
           <Button onClick={() => void handleReset()}>重置默认</Button>
           <div className="flex gap-2">
             <Button onClick={onClose}>取消</Button>
-            <Button type="primary" onClick={handleSave}>
+            <Button disabled={loading} type="primary" onClick={handleSave}>
               保存配置
             </Button>
           </div>
@@ -176,7 +186,7 @@ export function ModelConfigModal({ onClose, open }: ModelConfigModalProps) {
           </div>
         ) : (
           <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-relaxed text-slate-500">
-            💡 模型配置将应用于编辑器中的相应生成操作。不同步骤可以使用不同的模型，配置会自动保存到本地。模型选项从后端数据库获取。
+            模型配置仅用于本参赛版。语言模型须从当前可用目录选择；暂无可用模型时不能生成，不会自动改用其他供应商。
           </div>
         )}
       </div>
