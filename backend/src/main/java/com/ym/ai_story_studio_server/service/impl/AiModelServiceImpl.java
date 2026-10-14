@@ -13,6 +13,7 @@ import com.ym.ai_story_studio_server.dto.aimodel.ModelVO;
 import com.ym.ai_story_studio_server.entity.AiModel;
 import com.ym.ai_story_studio_server.mapper.AiModelMapper;
 import com.ym.ai_story_studio_server.service.AiModelService;
+import com.ym.ai_story_studio_server.provider.TextModelPolicy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -32,6 +33,7 @@ import java.util.stream.Collectors;
 public class AiModelServiceImpl implements AiModelService {
 
     private final AiModelMapper aiModelMapper;
+    private final TextModelPolicy textModelPolicy;
 
     @Override
     public List<ModelVO> getEnabledModelsByType(String type) {
@@ -46,6 +48,7 @@ public class AiModelServiceImpl implements AiModelService {
         log.info("[AiModelService] 查询到{}条{}类型的模型", models.size(), type);
 
         return models.stream()
+                .filter(textModelPolicy::isAvailable)
                 .map(this::convertToVO)
                 .collect(Collectors.toList());
     }

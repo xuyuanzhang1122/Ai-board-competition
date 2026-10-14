@@ -26,8 +26,6 @@ import java.util.Set;
 /** Official endpoints only. No automatic retries, supplier fallback or HTTP redirects. */
 @Component
 public class OfficialTextProvider implements TextGenerationProvider, DisposableBean {
-    private static final Set<String> DEEPSEEK_MODELS = Set.of("deepseek-flash", "deepseek-v4-pro");
-    private static final Set<String> MIMO_MODELS = Set.of("mimo-v2.6-pro");
     private static final Set<String> MIMO_ENDPOINTS = Set.of(
             "https://api.xiaomimimo.com/v1", "https://token-plan-cn.xiaomimimo.com/v1");
     private final TextProviderProperties properties;
@@ -65,15 +63,12 @@ public class OfficialTextProvider implements TextGenerationProvider, DisposableB
     }
 
     private boolean isDeepseek(String model) {
-        return model != null && DEEPSEEK_MODELS.contains(model);
+        return "DeepSeek".equals(TextModelRegistry.require(model).provider());
     }
 
     @Override
     public void validateModelConfiguration(String model) {
         boolean deepseek = isDeepseek(model);
-        if (!deepseek && (model == null || !MIMO_MODELS.contains(model))) {
-            throw new BusinessException(ResultCode.PARAM_INVALID, "文本模型已停用或不受支持，请重新选择");
-        }
         TextProviderProperties.Endpoint endpoint = deepseek ? properties.getDeepseek() : properties.getMimo();
         if (endpoint == null || !endpoint.isEnabled() || endpoint.getApiKey() == null || endpoint.getApiKey().isBlank()) {
             throw new BusinessException(ResultCode.CONFIG_ERROR, "所选文本供应商尚未启用或未配置凭据");
@@ -107,7 +102,7 @@ public class OfficialTextProvider implements TextGenerationProvider, DisposableB
         TextProviderProperties.Endpoint endpoint = deepseek ? properties.getDeepseek() : properties.getMimo();
         String supplier = deepseek ? "DEEPSEEK" : "MIMO";
         Map<String, Object> body = new HashMap<>();
-        body.put("model", model);
+        body.put("model", TextModelRegistry.require(model).apiModelId());
         body.put("messages", List.of(Map.of("role", "user", "content", prompt)));
         body.put("stream", false);
         body.put(deepseek ? "max_tokens" : "max_completion_tokens", maxTokens);
