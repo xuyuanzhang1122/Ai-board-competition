@@ -6,6 +6,7 @@ import com.ym.ai_story_studio_server.common.ResultCode;
 import com.ym.ai_story_studio_server.config.AiProperties;
 import com.ym.ai_story_studio_server.dto.ai.TextGenerateRequest;
 import com.ym.ai_story_studio_server.dto.ai.TextGenerateResponse;
+import com.ym.ai_story_studio_server.dto.ai.TextTaskSnapshot;
 import com.ym.ai_story_studio_server.entity.Job;
 import com.ym.ai_story_studio_server.exception.BusinessException;
 import com.ym.ai_story_studio_server.mapper.JobMapper;
@@ -17,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * AI文本生成服务
@@ -93,17 +95,9 @@ public class AiTextService {
         log.info("异步文本生成任务提交 - userId: {}, promptLength: {}",
                 userId, request.prompt().length());
 
-        // 1. 应用默认配置
-        AiProperties.Text textConfig = aiProperties.getText();
-        String model = request.model() != null ? request.model() : textConfig.getModel();
-        textProvider.validateModelConfiguration(model);
-
-        textProvider.validateRequest(request.prompt(), model, textConfig.getMaxTokens(),
-                request.temperature() != null ? request.temperature() : textConfig.getTemperature(),
-                request.topP() != null ? request.topP() : textConfig.getTopP());
-
-        // 2. 创建任务记录
-        Job job = createJob(userId, request.projectId(), model, request.prompt());
+        TextTaskSnapshot snapshot = prepareSnapshot(request);
+        String model = snapshot.model();
+        Job job = createJob(userId, request.projectId(), snapshot, "TEXT_GENERATION", "PENDING");
         log.info("Job created - jobId: {}, jobType: TEXT_GENERATION", job.getId());
 
         // 3. 异步执行生成
@@ -123,80 +117,77 @@ public class AiTextService {
      * 异步执行文本生成任务
      */
     @org.springframework.scheduling.annotation.Async("taskExecutor")
-    public void executeTextGenerationAsync(Long jobId, TextGenerateRequest request) {
+    public void executeTextGenerationAsync(Long jobId, TextGenerateRequest ignoredRequest) {
+        Job job = jobMapper.selectById(jobId);
+        if (job != null) executeQueuedTextJob(jobId, job.getUserId(), job.getProjectId());
+    }
+
+    public Job createQueuedParsingJob(Long userId, Long projectId, String prompt) {
+        TextTaskSnapshot snapshot = prepareSnapshot(new TextGenerateRequest(prompt, null, null, projectId));
+        return createJob(userId, projectId, snapshot, "PARSE_TEXT", "PENDING");
+    }
+
+    private TextTaskSnapshot prepareSnapshot(TextGenerateRequest request) {
+        AiProperties.Text config = aiProperties.getText();
+        String model = request.model() != null ? request.model() : config.getModel();
+        TextTaskSnapshot snapshot = new TextTaskSnapshot(1, model, request.prompt(), config.getMaxTokens(),
+                request.temperature() != null ? request.temperature() : config.getTemperature(),
+                request.topP() != null ? request.topP() : config.getTopP());
+        textProvider.validateModelConfiguration(model);
+        textProvider.validateRequest(snapshot.prompt(), model, snapshot.maxTokens(), snapshot.temperature(), snapshot.topP());
+        return snapshot;
+    }
+
+    /** Consume one saved task. Neither broker payload nor current defaults supply generation parameters. */
+    public void executeQueuedTextJob(Long jobId, Long userId, Long projectId) {
+        Job job = jobMapper.selectById(jobId);
+        if (job == null) return;
+        if (userId == null || projectId == null || !Objects.equals(userId, job.getUserId())
+                || !Objects.equals(projectId, job.getProjectId())
+                || !("PARSE_TEXT".equals(job.getJobType()) || "TEXT_GENERATION".equals(job.getJobType()))) {
+            throw new BusinessException(ResultCode.ACCESS_DENIED, "文本任务归属不匹配");
+        }
+        if (!"PENDING".equals(job.getStatus())) return;
+
+        TextTaskSnapshot snapshot;
         try {
-            // 从数据库加载Job
-            Job job = jobMapper.selectById(jobId);
-            if (job == null) {
-                log.error("任务不存在 - jobId: {}", jobId);
-                return;
+            var metadata = objectMapper.readTree(job.getMetaJson());
+            snapshot = objectMapper.treeToValue(metadata.path("textSnapshot"), TextTaskSnapshot.class);
+            if (snapshot == null || snapshot.version() != 1
+                    || !Objects.equals(metadata.path("model").asText(null), snapshot.model())) {
+                throw new BusinessException(ResultCode.PARAM_INVALID, "文本任务快照不受支持，请重新提交");
             }
-
-            // 设置用户上下文
-            UserContext.setUserId(job.getUserId());
-
-            // 应用默认配置
-            AiProperties.Text textConfig = aiProperties.getText();
-            String model = objectMapper.readTree(job.getMetaJson()).path("model").asText(null);
-            textProvider.validateModelConfiguration(model);
-            Integer maxTokens = textConfig.getMaxTokens();
-            Double temperature = request.temperature() != null ? request.temperature() : textConfig.getTemperature();
-            Double topP = request.topP() != null ? request.topP() : textConfig.getTopP();
-            textProvider.validateRequest(request.prompt(), model, maxTokens, temperature, topP);
-
-            log.info("开始异步生成文本 - jobId: {}", jobId);
-
-            // ✅ 步骤1: 先进行积分扣费检查(预扣费)
-            Map<String, Object> metaData = new HashMap<>();
-            metaData.put("model", model);
-            metaData.put("maxTokens", maxTokens);
-            metaData.put("temperature", temperature);
-            metaData.put("topP", topP);
-            metaData.put("prompt", request.prompt());
-
-            ChargingService.ChargingResult chargingResult = chargingService.charge(
-                    ChargingService.ChargingRequest.builder()
-                            .jobId(job.getId())
-                            .bizType("TEXT_GENERATION")
-                            .modelCode(model)
-                            .quantity(1)
-                            .metaData(metaData)
-                            .build()
-            );
-
-            log.info("预扣费完成 - jobId: {}, cost: {}, balanceAfter: {}", 
-                    jobId, chargingResult.getTotalCost(), chargingResult.getBalanceAfter());
-
-            // 步骤2: 调用当前文本 provider
-            TextGenerationResult apiResponse = textProvider.generateText(
-                    request.prompt(),
-                    model,
-                    maxTokens,
-                    temperature,
-                    topP
-            );
-
-            // 提取生成的文本
-            String generatedText = apiResponse.text();
-
-            Integer tokensUsed = apiResponse.tokensUsed() == null ? 0 : apiResponse.tokensUsed();
-
-            log.info("文本生成成功 - jobId: {}, tokensUsed: {}", jobId, tokensUsed);
-
-            // ✅ 步骤3: 更新任务状态为成功
-            updateJobSuccess(job, model, request.prompt(), generatedText, tokensUsed, apiResponse);
-
-            log.info("异步文本生成完成 - jobId: {}, cost: {}", jobId, chargingResult.getTotalCost());
-
+            textProvider.validateModelConfiguration(snapshot.model());
+            textProvider.validateRequest(snapshot.prompt(), snapshot.model(), snapshot.maxTokens(), snapshot.temperature(), snapshot.topP());
         } catch (Exception e) {
-            log.error("异步文本生成失败 - jobId: {}", jobId, e);
-            Job job = jobMapper.selectById(jobId);
-            if (job != null) {
-                UserContext.setUserId(job.getUserId());
-                updateJobFailed(job, e.getMessage());
-            }
+            String reason = e instanceof BusinessException ? e.getMessage() : "文本任务缺少有效快照，请重新提交";
+            jobMapper.failPendingTextJob(jobId, userId, projectId, reason);
+            return;
+        }
+        if (jobMapper.claimPendingTextJob(jobId, userId, projectId) != 1) return;
+
+        Long previousUser = UserContext.getUserId();
+        UserContext.setUserId(userId);
+        try {
+            Map<String, Object> metadata = new HashMap<>();
+            metadata.put("model", snapshot.model());
+            metadata.put("prompt", snapshot.prompt());
+            metadata.put("maxTokens", snapshot.maxTokens());
+            metadata.put("temperature", snapshot.temperature());
+            metadata.put("topP", snapshot.topP());
+            ChargingService.ChargingResult charge = chargingService.charge(ChargingService.ChargingRequest.builder()
+                    .jobId(jobId).bizType("TEXT_GENERATION").modelCode(snapshot.model())
+                    .quantity(1).metaData(metadata).build());
+            job.setCostPoints(charge.getTotalCost());
+            TextGenerationResult result = textProvider.generateText(snapshot.prompt(), snapshot.model(),
+                    snapshot.maxTokens(), snapshot.temperature(), snapshot.topP());
+            updateJobSuccess(job, snapshot.model(), snapshot.prompt(), result.text(),
+                    result.tokensUsed() == null ? 0 : result.tokensUsed(), result);
+        } catch (Exception e) {
+            updateJobFailed(job, e instanceof BusinessException ? e.getMessage() : "文本任务执行失败，请核对任务记录");
         } finally {
-            UserContext.clear();
+            if (previousUser == null) UserContext.clear();
+            else UserContext.setUserId(previousUser);
         }
     }
 
@@ -256,7 +247,8 @@ public class AiTextService {
                 model, maxTokens, temperature, topP);
 
         // 2. 创建任务记录 (✅ 修复: 传入 prompt)
-        Job job = createJob(userId, request.projectId(), model, request.prompt());
+        Job job = createJob(userId, request.projectId(),
+                new TextTaskSnapshot(1, model, request.prompt(), maxTokens, temperature, topP), "TEXT_GENERATION", "RUNNING");
         log.info("Job created - jobId: {}, jobType: TEXT_GENERATION", job.getId());
 
         try {
@@ -327,17 +319,18 @@ public class AiTextService {
      *
      * @param userId 用户ID
      * @param projectId 项目ID
-     * @param model 使用的模型
-     * @param prompt 用户提示词
+     * @param snapshot 冻结的文本生成参数
+     * @param jobType 文本任务类型
+     * @param status 初始任务状态
      * @return 任务对象
      */
-    private Job createJob(Long userId, Long projectId, String model, String prompt) {
+    private Job createJob(Long userId, Long projectId, TextTaskSnapshot snapshot, String jobType, String status) {
         Job job = new Job();
         job.setUserId(userId);
         // 工具箱功能时projectId为null,使用0表示"不关联项目"
         job.setProjectId(projectId != null ? projectId : 0L);
-        job.setJobType("TEXT_GENERATION");
-        job.setStatus("RUNNING");
+        job.setJobType(jobType);
+        job.setStatus(status);
         job.setProgress(0);
         job.setTotalItems(1);
         job.setDoneItems(0);
@@ -345,12 +338,13 @@ public class AiTextService {
         // ✅ 修复: 使用 ObjectMapper 安全地序列化 JSON (自动处理特殊字符转义)
         try {
             Map<String, Object> metaData = new HashMap<>();
-            metaData.put("model", model);
-            metaData.put("prompt", prompt);
+            metaData.put("model", snapshot.model());
+            metaData.put("prompt", snapshot.prompt());
+            metaData.put("textSnapshot", snapshot);
             job.setMetaJson(objectMapper.writeValueAsString(metaData));
         } catch (Exception e) {
             log.error("Failed to serialize meta_json", e);
-            job.setMetaJson(String.format("{\"model\":\"%s\",\"prompt\":\"\"}", model));
+            throw new BusinessException(ResultCode.SYSTEM_ERROR, "文本任务快照保存失败");
         }
 
         jobMapper.insert(job);
@@ -373,7 +367,8 @@ public class AiTextService {
 
         // ✅ 修复: 使用 ObjectMapper 安全地序列化 JSON
         try {
-            Map<String, Object> metaData = new HashMap<>();
+            Map<String, Object> metaData = objectMapper.readValue(job.getMetaJson(),
+                    new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
             metaData.put("model", model);
             metaData.put("prompt", prompt);
             metaData.put("text", text);
@@ -384,10 +379,10 @@ public class AiTextService {
             metaData.put("providerRequestId", result.requestId());
             job.setMetaJson(objectMapper.writeValueAsString(metaData));
         } catch (Exception e) {
-            log.error("Failed to serialize meta_json", e);
+            throw new BusinessException(ResultCode.SYSTEM_ERROR, "文本任务结果保存失败");
         }
 
-        jobMapper.updateById(job);
+        jobMapper.finishClaimedTextJob(job);
     }
 
     /**
@@ -399,6 +394,14 @@ public class AiTextService {
     private void updateJobFailed(Job job, String errorMessage) {
         job.setStatus("FAILED");
         job.setErrorMessage(errorMessage);
-        jobMapper.updateById(job);
+        try {
+            Map<String, Object> metadata = objectMapper.readValue(job.getMetaJson(),
+                    new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+            metadata.put("executionError", errorMessage);
+            job.setMetaJson(objectMapper.writeValueAsString(metadata));
+        } catch (Exception ignored) {
+            // Preserve the saved snapshot even if the extra failure summary cannot be encoded.
+        }
+        jobMapper.finishClaimedTextJob(job);
     }
 }

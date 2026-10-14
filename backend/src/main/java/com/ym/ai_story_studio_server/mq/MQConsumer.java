@@ -353,8 +353,7 @@ public class MQConsumer {
 
         log.info("RECEIVED message - queue: {}", MQConstant.QUEUE_TEXT_PARSING);
         log.info("========== 消费消息: 文本解析 ==========");
-        log.info("队列: {}, jobId: {}, textLength: {}",
-                MQConstant.QUEUE_TEXT_PARSING, msg.getJobId(), msg.getRawText().length());
+        log.info("队列: {}, jobId: {}", MQConstant.QUEUE_TEXT_PARSING, msg.getJobId());
 
         try {
             executeTextParsing(msg);
@@ -364,7 +363,7 @@ public class MQConsumer {
         } catch (Exception e) {
             log.error("消息处理失败 - jobId: {}", msg.getJobId(), e);
             channel.basicNack(deliveryTag, false, false);
-            updateJobFailed(msg.getJobId(), e.getMessage());
+            // Saved task executor owns state; identity or ACK failures must not overwrite another/terminal job.
         }
     }
 
@@ -1628,18 +1627,7 @@ public class MQConsumer {
     }
 
     private void executeTextParsing(TextParsingMessage msg) {
-        log.info("执行文本解析 - jobId: {}", msg.getJobId());
-        updateJobRunning(msg.getJobId());
-        
-        UserContext.setUserId(msg.getUserId());
-        try {
-            aiTextService.generateText(new com.ym.ai_story_studio_server.dto.ai.TextGenerateRequest(
-                msg.getRawText(), null, null, msg.getProjectId()
-            ));
-            updateJobSuccess(msg.getJobId(), 1, 0);
-        } finally {
-            UserContext.clear();
-        }
+        aiTextService.executeQueuedTextJob(msg.getJobId(), msg.getUserId(), msg.getProjectId());
     }
 
     // ==================== Job状态更新方法 ====================

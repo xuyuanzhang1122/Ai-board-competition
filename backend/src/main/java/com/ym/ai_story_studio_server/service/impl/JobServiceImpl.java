@@ -261,10 +261,10 @@ public class JobServiceImpl implements JobService {
             throw new BusinessException(ResultCode.JOB_ALREADY_CANCELLED, "任务已取消");
         }
 
-        // 4. 更新任务状态为CANCELED
-        job.setStatus("CANCELED");
-        job.setFinishedAt(LocalDateTime.now());
-        jobMapper.updateById(job);
+        // 4. 仅更新仍在执行的任务，避免旧实体覆盖并发完成结果及供应商审计。
+        if (jobMapper.cancelActiveJob(jobId, userId) != 1) {
+            throw new BusinessException(ResultCode.JOB_ALREADY_COMPLETED, "任务状态已变化,请刷新后查看");
+        }
 
         log.info("任务取消成功, jobId: {}", jobId);
     }

@@ -68,6 +68,30 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class MQConsumerTest {
+    @Test
+    void textMessageExecutesSavedJobWithoutUsingMessageTextOrCreatingChildJob() throws Exception {
+        Channel channel = mock(Channel.class);
+        Message delivery = new Message(new byte[0]);
+        delivery.getMessageProperties().setDeliveryTag(8L);
+        consumer.handleTextParsing(new TextParsingMessage(12L, 1L, 7L, null), delivery, channel);
+        verify(aiTextService).executeQueuedTextJob(12L, 1L, 7L);
+        verify(aiTextService, never()).generateText(any());
+        verifyNoInteractions(jobMapper, chargingService);
+        verify(channel).basicAck(8L, false);
+    }
+
+    @Test
+    void rejectedIdentityDoesNotFailAnotherUsersJob() throws Exception {
+        Channel channel = mock(Channel.class);
+        Message delivery = new Message(new byte[0]);
+        delivery.getMessageProperties().setDeliveryTag(9L);
+        org.mockito.Mockito.doThrow(new BusinessException(ResultCode.ACCESS_DENIED))
+                .when(aiTextService).executeQueuedTextJob(12L, 2L, 7L);
+        consumer.handleTextParsing(new TextParsingMessage(12L, 2L, 7L, "tampered"), delivery, channel);
+        verifyNoInteractions(jobMapper, chargingService);
+        verify(channel).basicNack(9L, false, false);
+    }
+
 
     @Mock private GeeknowClient geeknowClient;
     @Mock private ImageGenerationRouter imageGenerationRouter;

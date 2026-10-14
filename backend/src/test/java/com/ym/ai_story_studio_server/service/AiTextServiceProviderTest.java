@@ -19,6 +19,82 @@ import static org.mockito.Mockito.*;
 
 class AiTextServiceProviderTest {
     @Test
+    void queuedTaskFreezesInputAndParametersAndUsesTheSameJob() throws Exception {
+        TextGenerationProvider provider = mock(TextGenerationProvider.class);
+        ChargingService charging = mock(ChargingService.class);
+        JobMapper jobs = mock(JobMapper.class);
+        AiProperties settings = new AiProperties();
+        settings.getText().setMaxTokens(256);
+        settings.getText().setTemperature(0.4);
+        settings.getText().setTopP(0.8);
+        when(jobs.insert(any(Job.class))).thenAnswer(invocation -> {
+            invocation.<Job>getArgument(0).setId(12L);
+            return 1;
+        });
+        AiTextService service = new AiTextService(provider, charging, jobs, settings, new ObjectMapper());
+        Job queued = service.createQueuedParsingJob(1L, 7L, "原始八仙过海创作输入");
+        when(jobs.selectById(12L)).thenReturn(queued);
+        when(jobs.claimPendingTextJob(12L, 1L, 7L)).thenReturn(1);
+        when(charging.charge(any())).thenReturn(ChargingService.ChargingResult.builder().totalCost(1).build());
+        when(provider.generateText(any(), any(), any(), any(), any()))
+                .thenReturn(new TextGenerationResult("草稿", "revision", "DEEPSEEK", "req-1", 10));
+        settings.getText().setModel("mimo-v2.6-pro");
+        settings.getText().setMaxTokens(999);
+        settings.getText().setTemperature(0.9);
+        service.executeQueuedTextJob(12L, 1L, 7L);
+        verify(provider).generateText("原始八仙过海创作输入", "deepseek-flash", 256, 0.4, 0.8);
+        verify(jobs, times(1)).insert(any(Job.class));
+        verify(jobs).finishClaimedTextJob(queued);
+        assertThat(queued.getStatus()).isEqualTo("SUCCEEDED");
+        assertThat(queued.getJobType()).isEqualTo("PARSE_TEXT");
+    }
+
+    @Test
+    void terminalRunningOrLostClaimNeverChargesOrCallsProvider() {
+        TextGenerationProvider provider = mock(TextGenerationProvider.class);
+        ChargingService charging = mock(ChargingService.class);
+        JobMapper jobs = mock(JobMapper.class);
+        AiTextService service = new AiTextService(provider, charging, jobs, new AiProperties(), new ObjectMapper());
+        Job job = queuedFixture();
+        when(jobs.selectById(12L)).thenReturn(job);
+        for (String state : new String[]{"SUCCEEDED", "FAILED", "CANCELED", "RUNNING"}) {
+            job.setStatus(state);
+            service.executeQueuedTextJob(12L, 1L, 7L);
+        }
+        verifyNoInteractions(provider, charging);
+        job.setStatus("PENDING");
+        when(jobs.claimPendingTextJob(12L, 1L, 7L)).thenReturn(0);
+        service.executeQueuedTextJob(12L, 1L, 7L);
+        verifyNoInteractions(charging);
+        verify(provider, never()).generateText(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void forgedMessageIdentityCannotMutateOrExecuteJob() {
+        TextGenerationProvider provider = mock(TextGenerationProvider.class);
+        ChargingService charging = mock(ChargingService.class);
+        JobMapper jobs = mock(JobMapper.class);
+        when(jobs.selectById(12L)).thenReturn(queuedFixture());
+        AiTextService service = new AiTextService(provider, charging, jobs, new AiProperties(), new ObjectMapper());
+        assertThatThrownBy(() -> service.executeQueuedTextJob(12L, 2L, 7L)).isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> service.executeQueuedTextJob(12L, 1L, 8L)).isInstanceOf(BusinessException.class);
+        verifyNoInteractions(provider, charging);
+        verify(jobs, never()).claimPendingTextJob(any(), any(), any());
+        verify(jobs, never()).finishClaimedTextJob(any());
+    }
+
+    private Job queuedFixture() {
+        Job job = new Job();
+        job.setId(12L);
+        job.setUserId(1L);
+        job.setProjectId(7L);
+        job.setJobType("PARSE_TEXT");
+        job.setStatus("PENDING");
+        job.setMetaJson("{\"model\":\"deepseek-flash\",\"textSnapshot\":{\"version\":1,\"model\":\"deepseek-flash\",\"prompt\":\"八仙过海\",\"maxTokens\":256,\"temperature\":0.4,\"topP\":0.8}}");
+        return job;
+    }
+
+    @Test
     void completedJobPreservesSupplierIdentityAndUnknownUsage() throws Exception {
         TextGenerationProvider provider = mock(TextGenerationProvider.class);
         ChargingService charging = mock(ChargingService.class);
@@ -34,7 +110,7 @@ class AiTextServiceProviderTest {
         AiTextService service = new AiTextService(provider, charging, jobs, new AiProperties(), mapper);
         service.generateText(new TextGenerateRequest("八仙过海", null, null, 1L));
         var captor = org.mockito.ArgumentCaptor.forClass(Job.class);
-        verify(jobs).updateById(captor.capture());
+        verify(jobs).finishClaimedTextJob(captor.capture());
         var metadata = mapper.readTree(captor.getValue().getMetaJson());
         assertThat(metadata.path("model").asText()).isEqualTo("deepseek-flash");
         assertThat(metadata.path("provider").asText()).isEqualTo("DEEPSEEK");
@@ -66,12 +142,15 @@ class AiTextServiceProviderTest {
         Job historical = new Job();
         historical.setId(12L);
         historical.setUserId(1L);
+        historical.setProjectId(7L);
+        historical.setJobType("TEXT_GENERATION");
+        historical.setStatus("PENDING");
         historical.setMetaJson("{\"model\":\"gemini-3.5-flash\"}");
         when(jobs.selectById(12L)).thenReturn(historical);
         doThrow(new BusinessException(ResultCode.PARAM_INVALID)).when(provider).validateModelConfiguration("gemini-3.5-flash");
         AiTextService service = new AiTextService(provider, charging, jobs, new AiProperties(), new ObjectMapper());
         service.executeTextGenerationAsync(12L, new TextGenerateRequest("八仙过海", null, null, 1L, "deepseek-flash"));
-        assertThat(historical.getStatus()).isEqualTo("FAILED");
+        verify(jobs).failPendingTextJob(eq(12L), eq(1L), eq(7L), anyString());
         verifyNoInteractions(charging);
         verify(provider, never()).generateText(any(), any(), any(), any(), any());
     }

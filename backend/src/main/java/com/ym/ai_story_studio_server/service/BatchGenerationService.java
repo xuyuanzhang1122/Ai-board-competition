@@ -116,6 +116,7 @@ public class BatchGenerationService {
     private final ObjectMapper objectMapper;
     private final ImageGenerationRouter imageGenerationRouter;
     private final AiProperties aiProperties;
+    private final AiTextService aiTextService;
 
     /**
      * 批量生成分镜图
@@ -601,7 +602,7 @@ public class BatchGenerationService {
         Project project = validateProjectAccess(userId, projectId);
 
         // 2. 创建Job任务
-        Job job = createBatchJob(userId, projectId, "PARSE_TEXT", 1);
+        Job job = aiTextService.createQueuedParsingJob(userId, projectId, request.rawText());
         log.info("文本解析任务已创建 - jobId: {}", job.getId());
 
         // 3. 发送MQ消息执行文本解析
