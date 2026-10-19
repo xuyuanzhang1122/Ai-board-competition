@@ -107,7 +107,7 @@ class AiTextServiceProviderTest {
             invocation.<Job>getArgument(0).setId(1L);
             return 1;
         });
-        when(charging.charge(any())).thenReturn(ChargingService.ChargingResult.builder().totalCost(1).build());
+        when(charging.charge(any())).thenReturn(ChargingService.ChargingResult.builder().totalCost(0).build());
         when(provider.generateText(any(), any(), any(), any(), any()))
                 .thenReturn(new TextGenerationResult("草稿", "actual-revision", "DEEPSEEK", "req-1", null));
         ObjectMapper mapper = new ObjectMapper();
@@ -115,6 +115,7 @@ class AiTextServiceProviderTest {
         service.generateText(new TextGenerateRequest("八仙过海", null, null, 1L));
         var captor = org.mockito.ArgumentCaptor.forClass(Job.class);
         verify(jobs).finishClaimedTextJob(captor.capture());
+        assertThat(captor.getValue().getCostPoints()).isZero();
         var metadata = mapper.readTree(captor.getValue().getMetaJson());
         assertThat(metadata.path("model").asText()).isEqualTo("deepseek-flash");
         assertThat(metadata.path("provider").asText()).isEqualTo("DEEPSEEK");

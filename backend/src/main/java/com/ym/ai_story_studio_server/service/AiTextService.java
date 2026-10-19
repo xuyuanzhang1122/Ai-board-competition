@@ -285,6 +285,7 @@ public class AiTextService {
                             .build()
             );
 
+            job.setCostPoints(chargingResult.getTotalCost());
             log.info("Competition free policy applied - jobId: {}, userCostPoints: {}",
                     job.getId(), chargingResult.getTotalCost());
 
