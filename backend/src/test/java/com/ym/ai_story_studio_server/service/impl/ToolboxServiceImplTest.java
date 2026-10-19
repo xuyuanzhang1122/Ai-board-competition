@@ -45,6 +45,10 @@ class ToolboxServiceImplTest {
                 new MapperBuilderAssistant(new MybatisConfiguration(), "toolbox-test"),
                 ToolboxSession.class
         );
+        TableInfoHelper.initTableInfo(
+                new MapperBuilderAssistant(new MybatisConfiguration(), "toolbox-charge-test"),
+                com.ym.ai_story_studio_server.entity.UsageCharge.class
+        );
     }
 
     @Mock private AiTextService aiTextService;
@@ -103,6 +107,45 @@ class ToolboxServiceImplTest {
         verify(toolboxSessionMapper).selectList(query.capture());
         query.getValue().getSqlSegment();
         assertTrue(query.getValue().getParamNameValuePairs().containsValue(101L));
+    }
+
+    @Test
+    void freeJobHistoryReturnsRecordedZeroWithoutRequiringChargeLedger() {
+        UserContext.setUserId(101L);
+        Job job = new Job();
+        job.setId(7L);
+        job.setJobType("TEXT_GENERATION");
+        job.setStatus("SUCCEEDED");
+        job.setCostPoints(0);
+        job.setCreatedAt(java.time.LocalDateTime.now());
+        var page = new com.baomidou.mybatisplus.extension.plugins.pagination.Page<Job>(1, 10, 1);
+        page.setRecords(java.util.List.of(job));
+        when(jobMapper.selectPage(any(), any())).thenReturn(page);
+
+        var history = toolboxService.getHistory(1, 10);
+
+        org.junit.jupiter.api.Assertions.assertEquals(0, history.getRecords().get(0).costPoints());
+        org.mockito.Mockito.verifyNoInteractions(usageChargeMapper);
+    }
+
+    @Test
+    void historicalJobWithoutRecordedCostStillReadsItsChargeLedger() {
+        UserContext.setUserId(101L);
+        Job job = new Job();
+        job.setId(8L);
+        job.setJobType("TEXT_GENERATION");
+        job.setStatus("SUCCEEDED");
+        job.setCreatedAt(java.time.LocalDateTime.now());
+        var page = new com.baomidou.mybatisplus.extension.plugins.pagination.Page<Job>(1, 10, 1);
+        page.setRecords(java.util.List.of(job));
+        when(jobMapper.selectPage(any(), any())).thenReturn(page);
+        var charge = new com.ym.ai_story_studio_server.entity.UsageCharge();
+        charge.setTotalCost(9);
+        when(usageChargeMapper.selectOne(any())).thenReturn(charge);
+
+        var history = toolboxService.getHistory(1, 10);
+
+        org.junit.jupiter.api.Assertions.assertEquals(9, history.getRecords().get(0).costPoints());
     }
 
     private ToolboxSession session(Long id, Long userId) {

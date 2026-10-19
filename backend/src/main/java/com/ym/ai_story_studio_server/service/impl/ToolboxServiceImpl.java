@@ -282,8 +282,9 @@ public class ToolboxServiceImpl implements ToolboxService {
         String aspectRatio = (String) metaData.get("aspectRatio");
         String resultContent = extractResultContent(type, metaData);
 
-        // 查询积分消耗
-        Integer costPoints = queryCostPoints(job.getId());
+        // 免费模式不生成扣费流水；优先使用任务已记录的费用，旧任务再查询流水。
+        Integer costPoints = job.getCostPoints() != null
+                ? job.getCostPoints() : queryCostPoints(job.getId());
 
         // 计算过期时间
         LocalDateTime expireAt = job.getCreatedAt().plusDays(7);
