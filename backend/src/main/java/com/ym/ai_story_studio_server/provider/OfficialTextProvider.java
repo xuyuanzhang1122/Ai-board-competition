@@ -91,7 +91,7 @@ public class OfficialTextProvider implements TextGenerationProvider, DisposableB
         if (deepseek ? !"https://api.deepseek.com".equals(baseUrl) : !MIMO_ENDPOINTS.contains(baseUrl)) {
             throw new BusinessException(ResultCode.CONFIG_ERROR, "文本供应商地址必须使用已支持的官方入口");
         }
-        budgetPolicy.quote(model, 32768);
+        if (!properties.isUnlimitedText()) budgetPolicy.quote(model, 32768);
     }
 
     private String normalizedBaseUrl(TextProviderProperties.Endpoint endpoint) {
@@ -127,7 +127,8 @@ public class OfficialTextProvider implements TextGenerationProvider, DisposableB
         body.put("thinking", Map.of("type", "disabled"));
         if (!deepseek && topP != null) body.put("top_p", topP);
 
-        var reservation = budgetLedger.reserve(budgetPolicy.quote(model, maxTokens), UserContext.getUserId());
+        var reservation = properties.isUnlimitedText() ? null
+                : budgetLedger.reserve(budgetPolicy.quote(model, maxTokens), UserContext.getUserId());
         TextGenerationResult result;
         TextBudgetLedger.Usage observed = null;
         boolean invalidUsage = false;
@@ -161,7 +162,7 @@ public class OfficialTextProvider implements TextGenerationProvider, DisposableB
             }
             result = new TextGenerationResult(choice.path("message").path("content").asText(),
                     root.path("model").asText(null), supplier, root.path("id").asText(null), tokens,
-                    input, output, reservation.id());
+                    input, output, reservation == null ? null : reservation.id());
         } catch (BusinessException e) {
             markReview(reservation, TextBudgetLedger.ReviewReason.INVALID_RESPONSE, observed);
             throw e;
@@ -174,6 +175,7 @@ public class OfficialTextProvider implements TextGenerationProvider, DisposableB
             throw new BusinessException(ResultCode.AI_SERVICE_ERROR, "文本供应商响应无法解析");
         }
         try {
+            if (reservation == null) return result;
             if (invalidUsage) budgetLedger.recordReview(reservation, observed, TextBudgetLedger.ReviewReason.INVALID_USAGE);
             else budgetLedger.complete(reservation, observed);
         } catch (RuntimeException auditFailure) {
@@ -185,6 +187,7 @@ public class OfficialTextProvider implements TextGenerationProvider, DisposableB
 
     private void markReview(TextBudgetLedger.Reservation reservation, TextBudgetLedger.ReviewReason reason,
                             TextBudgetLedger.Usage observed) {
+        if (reservation == null) return;
         try {
             if (observed == null) budgetLedger.requireReview(reservation, reason);
             else budgetLedger.recordReview(reservation, observed, reason);

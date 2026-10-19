@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 @Component
 @ConfigurationProperties(prefix = "ai.text-providers")
 public class TextProviderProperties {
+    private boolean unlimitedText;
     private Endpoint deepseek = new Endpoint("https://api.deepseek.com");
     private Endpoint mimo = new Endpoint("https://api.xiaomimimo.com/v1");
 

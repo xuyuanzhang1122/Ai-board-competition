@@ -109,11 +109,11 @@ class OfficialTextProviderTest {
         modelAccess = mock(TextModelAccess.class);
         ledger = mock(TextBudgetLedger.class);
         budgetPolicy = mock(TextBudgetPolicy.class);
-        when(budgetPolicy.quote(anyString(), anyInt())).thenAnswer(call -> new TextBudgetPolicy.Quote(
+        lenient().when(budgetPolicy.quote(anyString(), anyInt())).thenAnswer(call -> new TextBudgetPolicy.Quote(
                 call.getArgument(0), "synthetic", java.time.Instant.parse("2026-10-19T00:00:00Z"), "offline fixture",
                 "actual-revision", 1000, call.getArgument(1), java.math.BigDecimal.ONE,
                 java.math.BigDecimal.ONE, new java.math.BigDecimal("0.01")));
-        when(ledger.reserve(any(), any())).thenAnswer(call -> new TextBudgetLedger.Reservation(
+        lenient().when(ledger.reserve(any(), any())).thenAnswer(call -> new TextBudgetLedger.Reservation(
                 "reservation-1", 42L, call.getArgument(0)));
         provider = new OfficialTextProvider(properties, builder, modelAccess, budgetPolicy, ledger);
         UserContext.setUserId(42L);
@@ -121,6 +121,23 @@ class OfficialTextProviderTest {
 
     @org.junit.jupiter.api.AfterEach
     void clearUser() { UserContext.clear(); }
+
+    @Test
+    void explicitlyUnrestrictedTextIgnoresBudgetAndPriceButStillReturnsUsage() {
+        new org.springframework.boot.context.properties.bind.Binder(
+                new org.springframework.boot.context.properties.source.MapConfigurationPropertySource(
+                        Map.of("ai.text-providers.unlimited-text", "true")))
+                .bind("ai.text-providers", org.springframework.boot.context.properties.bind.Bindable.ofInstance(properties));
+        enable(properties.getDeepseek());
+        server.expect(requestTo("https://api.deepseek.com/chat/completions"))
+                .andRespond(withSuccess(success(",\"usage\":{\"prompt_tokens\":5,\"completion_tokens\":3,\"total_tokens\":8}"), MediaType.APPLICATION_JSON));
+        var result = generate("deepseek-flash");
+        assertThat(result.inputTokens()).isEqualTo(5);
+        assertThat(result.outputTokens()).isEqualTo(3);
+        assertThat(result.budgetReservationId()).isNull();
+        verifyNoInteractions(ledger, budgetPolicy);
+        server.verify();
+    }
 
     @Test
     void reservesBeforeHttpAndReturnsDurableCorrelationWithActualUsage() {
