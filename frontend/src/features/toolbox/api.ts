@@ -1,102 +1,59 @@
-import { modelApi } from '@/features/editor/model-api'
 import api from '@/shared/api/client'
-import type {
-  JobVO,
-  ToolboxGenerateRequest,
-  ToolboxGenerateResponse,
-  ToolboxHistoryVO,
-  ToolboxSessionVO,
-} from '@/shared/types/api'
 
-export interface AiModelVO {
-  code: string
-  enabled: number
+export type MessageType = 'TEXT' | 'IMAGE' | 'VIDEO'
+export type MessageStatus = 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'CANCELED'
+export interface ChatSession {
+  createdAt: string
   id: number
-  name: string
-  provider: string
-  type: 'LANGUAGE' | 'IMAGE' | 'VIDEO'
+  title: string
+  updatedAt: string
 }
-
-interface ToolboxHistoryBackendItem extends Omit<ToolboxHistoryVO, 'prompt' | 'text'> {
-  inputPrompt?: string | null
-  prompt?: string | null
-  resultContent?: string | null
-  text?: string | null
+export interface ChatMessage {
+  content: string
+  createdAt: string
+  errorMessage: string | null
+  id: number
+  jobId: number | null
+  model: string | null
+  resultUrl: string | null
+  role: 'USER' | 'ASSISTANT'
+  status: MessageStatus
+  type: MessageType
 }
-
-interface ToolboxHistoryPage {
-  records?: ToolboxHistoryBackendItem[]
+export interface SessionDetail {
+  messages: ChatMessage[]
+  session: ChatSession
 }
-
+export interface SendCommand {
+  aspectRatio?: string
+  clientRequestId: string
+  content: string
+  model: string
+  type: MessageType
+}
+export interface AcceptedMessage {
+  assistantMessage: ChatMessage
+  jobId: number
+  userMessage: ChatMessage
+}
+const base = '/toolbox/chat'
 export const toolboxApi = {
-  /**
-   * Generate content (text/image/video) in toolbox.
-   * Image/video generation initialization and long text responses may take up to three minutes.
-   */
-  generate(data: ToolboxGenerateRequest): Promise<ToolboxGenerateResponse> {
-    return api.post('/toolbox/generate', data, { timeout: 180_000 })
+  getSessions(): Promise<ChatSession[]> {
+    return api.get(`${base}/sessions`)
   },
-
-  /** Get toolbox generation history (last 7 days). */
-  async getHistory(params?: { page?: number; size?: number }): Promise<ToolboxHistoryVO[]> {
-    const response = await api.get<never, ToolboxHistoryPage>('/toolbox/history', {
-      params: {
-        page: params?.page || 1,
-        size: params?.size || 100,
-      },
-    })
-
-    // Backend returns PageResult. Preserve its historical field aliases for deployed versions.
-    const records = response.records || []
-    return records.map(
-      (item) =>
-        ({
-          ...item,
-          text: item.resultContent || item.text || null,
-          resultUrl: item.resultUrl || null,
-          prompt: item.inputPrompt || item.prompt || null,
-        }) as ToolboxHistoryVO,
-    )
+  createSession(data: { title?: string } = {}): Promise<ChatSession> {
+    return api.post(`${base}/sessions`, data)
   },
-
-  deleteHistory(id: number): Promise<void> {
-    return api.delete(`/toolbox/history/${id}`)
+  getSession(id: number): Promise<SessionDetail> {
+    return api.get(`${base}/sessions/${id}`)
   },
-
-  saveToAssets(id: number): Promise<void> {
-    return api.post(`/toolbox/history/${id}/save`)
+  sendMessage(id: number, command: SendCommand): Promise<AcceptedMessage> {
+    return api.post(`${base}/sessions/${id}/messages`, command)
   },
-
-  getModels(type: 'TEXT' | 'IMAGE' | 'VIDEO'): Promise<AiModelVO[]> {
-    const backendType = type === 'TEXT' ? 'LANGUAGE' : type
-    return modelApi.getModels(backendType)
+  cancelMessage(id: number): Promise<ChatMessage> {
+    return api.post(`${base}/messages/${id}/cancel`)
   },
-
-  getSessions(): Promise<ToolboxSessionVO[]> {
-    return api.get('/toolbox/sessions')
-  },
-
-  createSession(data: {
-    title: string
-    conversationsJson: string
-  }): Promise<ToolboxSessionVO> {
-    return api.post('/toolbox/sessions', data)
-  },
-
-  updateSession(
-    id: number,
-    data: { title: string; conversationsJson: string },
-  ): Promise<ToolboxSessionVO> {
-    return api.put(`/toolbox/sessions/${id}`, data)
-  },
-
   deleteSession(id: number): Promise<void> {
-    return api.delete(`/toolbox/sessions/${id}`)
-  },
-}
-
-export const jobApi = {
-  getJobStatus(jobId: number): Promise<JobVO> {
-    return api.get(`/jobs/${jobId}`)
+    return api.delete(`${base}/sessions/${id}`)
   },
 }

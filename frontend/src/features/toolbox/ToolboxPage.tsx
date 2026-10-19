@@ -1,197 +1,327 @@
-import { Empty, Tag } from '@lobehub/ui'
-import { BackBottom, ChatHeader } from '@lobehub/ui/chat'
-import { App } from 'antd'
-import { Sparkles } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import './toolbox.css'
 
-import { useUserStore } from '@/shared/store/user'
-
-import { ChatComposer } from './components/ChatComposer'
 import {
-  type ChatMessageAction,
-  ToolboxChatList,
-} from './components/ChatMessage'
-import { ConversationSidebar } from './components/ConversationSidebar'
-import { HistoryDrawer } from './components/HistoryDrawer'
-import { type ConversationItem, useToolboxStore } from './store'
+  BookOpen,
+  ChevronDown,
+  ChevronLeft,
+  House,
+  LoaderCircle,
+  MessageSquare,
+  PanelLeft,
+  Search,
+  Sparkles,
+  SquarePen,
+  Trash2,
+  X,
+} from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useStore } from 'zustand'
 
-const downloadUrl = (url: string, filename: string) => {
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  document.body.append(link)
-  link.click()
-  link.remove()
-}
+import { modelApi } from '@/features/editor/model-api'
+import type { ModelVO } from '@/shared/types/api'
+
+import type { MessageType } from './api'
+import { ChatComposer } from './components/ChatComposer'
+import { ConversationMessage } from './components/ChatMessage'
+import { chatStore, isActiveTask } from './store'
 
 export function ToolboxPage() {
-  const { message } = App.useApp()
-  const conversations = useToolboxStore((state) => state.conversations)
-  const sessions = useToolboxStore((state) => state.sessions)
-  const activeSessionId = useToolboxStore((state) => state.activeSessionId)
-  const init = useToolboxStore((state) => state.init)
-  const stopJobPolling = useToolboxStore((state) => state.stopJobPolling)
-  const saveToAssets = useToolboxStore((state) => state.saveToAssets)
-  const avatarUrl = useUserStore((state) => state.user?.avatarUrl)
-  const nickname = useUserStore((state) => state.user?.nickname)
-
-  const [showHistory, setShowHistory] = useState(false)
+  const state = useStore(chatStore)
+  const [params, setParams] = useSearchParams()
+  const navigate = useNavigate()
+  const path = useParams<{ id: string }>()
+  const sessionParam = params.get('session') || path.id
+  const sessionId = sessionParam && /^\d+$/.test(sessionParam) ? Number(sessionParam) : null
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const [content, setContent] = useState('')
+  const [type, setType] = useState<MessageType>('TEXT')
+  const [models, setModels] = useState<ModelVO[]>([])
+  const [model, setModel] = useState('')
+  const [modelError, setModelError] = useState('')
+  const [creating, setCreating] = useState(false)
+  const [modelReload, setModelReload] = useState(0)
   const scrollRef = useRef<HTMLDivElement>(null)
-  const hasMessages = conversations.length > 0
-  const lastResponseStatus = conversations.at(-1)?.aiResponse?.status
-  const activeSession = sessions.find((session) => session.id === activeSessionId)
-
+  const hasMessages = state.messages.length > 0
+  const activeTasks = state.messages.some(isActiveTask)
   useEffect(() => {
-    void init()
-    return () => stopJobPolling()
-  }, [init, stopJobPolling])
-
+    void chatStore.getState().list()
+  }, [])
+  useEffect(() => {
+    let mounted = true
+    void modelApi
+      .getModels('LANGUAGE')
+      .then((items) => {
+        if (!mounted) return
+        const available = items.filter((item) => item.enabled === 1)
+        setModels(available)
+        setModel((previous) =>
+          available.some((item) => item.code === previous) ? previous : available[0]?.code || '',
+        )
+        setModelError('')
+      })
+      .catch(() => {
+        if (mounted) setModelError('模型列表加载失败，请重试。')
+      })
+    return () => {
+      mounted = false
+    }
+  }, [modelReload])
+  useEffect(() => {
+    if (chatStore.getState().activeId !== sessionId) void chatStore.getState().open(sessionId)
+    let stopped = false
+    let timer: ReturnType<typeof setTimeout>
+    const poll = async () => {
+      if (stopped) return
+      await chatStore.getState().refresh()
+      if (!stopped) timer = setTimeout(() => void poll(), 2000)
+    }
+    if (sessionId !== null) timer = setTimeout(() => void poll(), 2000)
+    return () => {
+      stopped = true
+      clearTimeout(timer)
+    }
+  }, [sessionId])
+  const lastMessage = state.messages.at(-1)
   useEffect(() => {
     const element = scrollRef.current
     if (element) element.scrollTop = element.scrollHeight
-  }, [conversations.length, lastResponseStatus])
-
-  useEffect(() => {
-    let previousJobId = useToolboxStore.getState().pollingJobId
-    let lastConversationId = useToolboxStore.getState().pollingConversationId
-
-    return useToolboxStore.subscribe((state) => {
-      if (state.pollingConversationId) lastConversationId = state.pollingConversationId
-      if (previousJobId !== null && state.pollingJobId === null) {
-        const conversation = state.conversations.find((item) => item.id === lastConversationId)
-        const status = conversation?.aiResponse?.status
-        if (status === 'READY') {
-          void message.success('生成完成')
-        } else if (status === 'FAILED') {
-          void message.error(`生成失败：${conversation?.aiResponse?.errorMessage || '未知错误'}`)
-        }
-      }
-      previousJobId = state.pollingJobId
-    })
-  }, [message])
-
-  const handleAction = useCallback(
-    async (
-      conversation: ConversationItem,
-      action: ChatMessageAction,
-      payload?: number | string,
-    ) => {
-      const response = conversation.aiResponse
-
-      if (action === 'copy') {
-        if (!response?.text) return
-        try {
-          await navigator.clipboard.writeText(response.text)
-          void message.success('已复制到剪贴板')
-        } catch {
-          void message.error('复制失败')
-        }
-        return
-      }
-
-      if (action === 'open') {
-        const target = typeof payload === 'string' ? payload : response?.resultUrl
-        if (target) window.open(target, '_blank', 'noopener,noreferrer')
-        return
-      }
-
-      if (action === 'download-image') {
-        const urls = response?.allImageUrls?.length
-          ? response.allImageUrls
-          : response?.resultUrl
-            ? [response.resultUrl]
-            : []
-        const index = typeof payload === 'number' ? payload : 0
-        const url = urls[index]
-        if (!url) return
-        downloadUrl(url, `toolbox-image-${Date.now()}-${index + 1}`)
-        void message.success(`开始下载图片 ${index + 1}`)
-        return
-      }
-
-      if (action === 'download') {
-        if (!response?.resultUrl) return
-        downloadUrl(
-          response.resultUrl,
-          `toolbox-${conversation.contentType.toLowerCase()}-${Date.now()}`,
-        )
-        void message.success('开始下载')
-        return
-      }
-
-      if (action === 'save-character' || action === 'save-scene') {
-        if (!response?.historyId) {
-          void message.warning('无法保存：缺少历史记录 ID')
-          return
-        }
-        try {
-          await saveToAssets(response.historyId)
-          void message.success(action === 'save-character' ? '已保存到角色库' : '已保存到场景库')
-        } catch (error) {
-          void message.error(error instanceof Error ? error.message : '保存失败')
-        }
-      }
-    },
-    [message, saveToAssets],
+  }, [state.messages.length, lastMessage?.status, lastMessage?.content])
+  const chooseSession = (id: number | null) => {
+    navigate(id === null ? '/toolbox' : `/toolbox?session=${id}`)
+    if (id === null) void chatStore.getState().open(null)
+    setContent('')
+    setHistoryOpen(false)
+  }
+  const send = async () => {
+    if (
+      creating ||
+      state.sending ||
+      state.pending ||
+      activeTasks ||
+      !content.trim() ||
+      !model ||
+      type !== 'TEXT'
+    )
+      return
+    const sentContent = content
+    setCreating(true)
+    try {
+      const id = await chatStore.getState().ensureSession(content)
+      setParams({ session: String(id) }, { replace: sessionId === null })
+      await chatStore.getState().send(content, model)
+      if (!chatStore.getState().pending && chatStore.getState().activeId === id)
+        setContent((previous) => (previous === sentContent ? '' : previous))
+    } catch (error) {
+      chatStore.setState({ error: error instanceof Error ? error.message : '创建会话失败，请重试' })
+    } finally {
+      setCreating(false)
+    }
+  }
+  const composer = (
+    <ChatComposer
+      busy={creating || state.sending}
+      content={content}
+      locked={activeTasks || !!state.pending || state.loading}
+      model={model}
+      models={models}
+      type={type}
+      onContentChange={setContent}
+      onModelChange={setModel}
+      onSend={() => void send()}
+      onTypeChange={setType}
+    />
   )
-
+  const pendingHere = state.pending?.sessionId === state.activeId
   return (
-    <div className="relative flex h-full min-h-0 overflow-hidden bg-background">
-      <ConversationSidebar onOpenHistory={() => setShowHistory(true)} />
-
-      <main className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
-        <ChatHeader
-          left={
-            <ChatHeader.Title
-              desc={activeSession?.title || '新对话'}
-              tag={<Tag color="blue">AI 创作</Tag>}
-              title="工具箱"
-            />
-          }
-        />
-
-        {hasMessages ? (
-          <>
-            <div className="relative min-h-0 flex-1 pt-[52px]">
-              <div className="h-full overflow-y-auto" ref={scrollRef}>
-                <div className="mx-auto max-w-[900px] px-6 pb-8 pt-8 max-sm:px-3">
-                  <ToolboxChatList
-                    conversations={conversations}
-                    user={{ avatarUrl: avatarUrl ?? undefined, nickname: nickname ?? undefined }}
-                    onAction={(conversation, action, payload) =>
-                      void handleAction(conversation, action, payload)
-                    }
-                  />
-                </div>
-              </div>
-              <BackBottom target={scrollRef} text="回到底部" />
+    <div className="toolbox-app">
+      <nav aria-label="工具箱导航" className="toolbox-rail">
+        <Link aria-label="返回创作首页" className="toolbox-brand" title="返回创作首页" to="/home">
+          <Sparkles size={25} />
+        </Link>
+        <button
+          aria-label="新对话"
+          title="新对话"
+          type="button"
+          onClick={() => chooseSession(null)}
+        >
+          <SquarePen size={22} />
+        </button>
+        <button
+          aria-expanded={historyOpen}
+          aria-label="会话历史"
+          title="会话历史"
+          type="button"
+          onClick={() => setHistoryOpen((value) => !value)}
+        >
+          <PanelLeft size={22} />
+        </button>
+        <Link aria-label="创作工作台" title="创作工作台" to="/home">
+          <House size={22} />
+        </Link>
+        <div className="toolbox-rail-bottom">
+          <span title="你的不对我的队 · 参赛展示">
+            <Sparkles size={18} />
+          </span>
+        </div>
+      </nav>
+      {historyOpen && (
+        <>
+          <button
+            aria-label="关闭会话历史"
+            className="toolbox-history-scrim"
+            onClick={() => setHistoryOpen(false)}
+          />
+          <aside aria-label="会话列表" className="toolbox-history">
+            <div className="toolbox-history-heading">
+              <strong>你的对话</strong>
+              <button aria-label="收起会话历史" onClick={() => setHistoryOpen(false)}>
+                <ChevronLeft size={19} />
+              </button>
             </div>
-
-            <footer className="shrink-0 border-t border-border bg-background/95 px-6 pb-3 pt-3 max-sm:px-3">
-              <ChatComposer />
+            <button className="toolbox-new-chat" onClick={() => chooseSession(null)}>
+              <SquarePen size={17} />
+              新对话
+            </button>
+            <label className="toolbox-history-search">
+              <Search size={16} />
+              <input
+                aria-label="搜索会话"
+                placeholder="搜索对话"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+              />
+            </label>
+            <div className="toolbox-session-list">
+              {state.sessions
+                .filter((item) => item.title.toLowerCase().includes(search.toLowerCase()))
+                .map((item) => (
+                  <div
+                    className={`toolbox-session ${state.activeId === item.id ? 'is-active' : ''}`}
+                    key={item.id}
+                  >
+                    <button className="toolbox-session-open" onClick={() => chooseSession(item.id)}>
+                      <MessageSquare size={16} />
+                      <span>{item.title || '新对话'}</span>
+                    </button>
+                    <button
+                      aria-label={`删除会话：${item.title}`}
+                      className="toolbox-session-delete"
+                      onClick={() => {
+                        void state.remove(item.id).then(() => {
+                          if (sessionId === item.id && chatStore.getState().activeId === null)
+                            chooseSession(null)
+                        })
+                      }}
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                ))}
+              {state.sessions.length === 0 && <p>你的对话将保存在这里</p>}
+            </div>
+            <p className="toolbox-history-brand">
+              你的不对我的队
+              <br />
+              2026 山东省首届大学生 AI 大模型创新传播大赛
+            </p>
+          </aside>
+        </>
+      )}
+      <main className="toolbox-main">
+        <header className="toolbox-header">
+          <Link to="/home">
+            创作工具箱
+            <ChevronDown size={15} />
+          </Link>
+          <span>
+            {state.sessions.find((item) => item.id === state.activeId)?.title || '新对话'}
+          </span>
+        </header>
+        {(state.error || state.pending || modelError) && (
+          <div className="toolbox-notice" role="alert">
+            <span>
+              {state.error ||
+                (state.pending ? '有一条消息尚未确认受理，请用原请求重试。' : modelError)}
+            </span>
+            {state.pending && (
+              <button
+                disabled={state.sending}
+                onClick={() => {
+                  if (!pendingHere) chooseSession(state.pending!.sessionId)
+                  void state.retry().then(() => {
+                    if (!chatStore.getState().pending) setContent('')
+                  })
+                }}
+              >
+                {state.sending ? '正在确认…' : '重试原请求'}
+              </button>
+            )}
+            {modelError && (
+              <button onClick={() => setModelReload((value) => value + 1)}>重新加载模型</button>
+            )}
+            {state.error && !state.pending && (
+              <button aria-label="关闭提示" onClick={state.clearError}>
+                <X size={15} />
+              </button>
+            )}
+          </div>
+        )}
+        {state.loading ? (
+          <div className="toolbox-loading" role="status">
+            <LoaderCircle className="toolbox-spinner" size={21} />
+            正在加载对话…
+          </div>
+        ) : hasMessages ? (
+          <>
+            <div className="toolbox-scroll" ref={scrollRef}>
+              <div className="toolbox-conversation">
+                {state.messages.map((item) => (
+                  <ConversationMessage
+                    key={item.id}
+                    message={item}
+                    onCancel={(id) => void state.cancel(id)}
+                  />
+                ))}
+              </div>
+            </div>
+            <footer className="toolbox-footer">
+              <p className="toolbox-disclaimer">AI 生成内容可能有误，请核实重要信息。</p>
+              {composer}
+              <p className="toolbox-competition-note">
+                本版本仅供参赛展示与评审使用，非正式商业版本
+              </p>
             </footer>
           </>
         ) : (
-          <section className="flex min-h-0 flex-1 items-center justify-center px-6 pb-10 pt-[62px] max-sm:px-3">
-            <div className="w-full max-w-[900px]">
-              <Empty
-                align="center"
-                description="从文字灵感到图片生成，在同一段对话里完成"
-                icon={Sparkles}
-                imageSize={52}
-                title="你今天在想些什么？"
-                type="page"
-              />
-              <ChatComposer />
-              <p className="mt-1 text-center text-xs text-muted-foreground">
-                仅保留最近 7 天的生成记录，有效素材请及时引用或保存
-              </p>
+          <section className="toolbox-empty">
+            <div className="toolbox-empty-content">
+              <h1>今天想聊点什么？</h1>
+              {composer}
+              <div className="toolbox-suggestions">
+                <button onClick={() => setContent('帮我把一个创意整理成完整的故事大纲')}>
+                  <BookOpen size={18} />
+                  把一个灵感，变成故事大纲
+                </button>
+                <button onClick={() => setContent('和我一起构思一个有记忆点的角色')}>
+                  <MessageSquare size={18} />
+                  一起构思一个有记忆点的角色
+                </button>
+                <button onClick={() => setContent('帮我润色文案，让表达更清晰生动')}>
+                  <Sparkles size={18} />
+                  让文字更清晰，让创意更生动
+                </button>
+              </div>
             </div>
+            <p className="toolbox-empty-brand">
+              你的不对我的队 · 2026 山东省首届大学生 AI 大模型创新传播大赛
+              <br />
+              <span>本版本仅供参赛展示与评审使用，非正式商业版本</span>
+            </p>
           </section>
         )}
       </main>
-
-      <HistoryDrawer open={showHistory} onClose={() => setShowHistory(false)} />
     </div>
   )
 }

@@ -1,284 +1,152 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
-import type { ToolboxHistoryVO } from '@/shared/types/api'
+import type { ChatMessage, ChatSession } from './api'
+import { createChatStore } from './store'
 
-import { type ConversationItem, selectEstimatedCost, useToolboxStore } from './store'
-
-const apiMocks = vi.hoisted(() => ({
-  createSession: vi.fn(),
-  deleteHistory: vi.fn(),
-  deleteSession: vi.fn(),
-  generate: vi.fn(),
-  getHistory: vi.fn(),
-  getJobStatus: vi.fn(),
-  getSessions: vi.fn(),
-  saveToAssets: vi.fn(),
-  updateSession: vi.fn(),
-}))
-
-const userStoreState = vi.hoisted(() => ({
-  fetchProfile: vi.fn(),
-  token: '',
-  user: null as { userId: number } | null,
-  userId: null as number | null,
-}))
-
-vi.mock('./api', () => ({
-  jobApi: { getJobStatus: apiMocks.getJobStatus },
-  toolboxApi: {
-    createSession: apiMocks.createSession,
-    deleteHistory: apiMocks.deleteHistory,
-    deleteSession: apiMocks.deleteSession,
-    generate: apiMocks.generate,
-    getHistory: apiMocks.getHistory,
-    getSessions: apiMocks.getSessions,
-    saveToAssets: apiMocks.saveToAssets,
-    updateSession: apiMocks.updateSession,
-  },
-}))
-
-vi.mock('@/shared/store/user', () => ({
-  useUserStore: {
-    getState: () => userStoreState,
-  },
-}))
-
-const createLocalStorage = (): Storage => {
-  const values = new Map<string, string>()
-  return {
-    get length() {
-      return values.size
-    },
-    clear: vi.fn(() => values.clear()),
-    getItem: vi.fn((key: string) => values.get(key) ?? null),
-    key: vi.fn((index: number) => [...values.keys()][index] ?? null),
-    removeItem: vi.fn((key: string) => values.delete(key)),
-    setItem: vi.fn((key: string, value: string) => values.set(key, value)),
-  }
-}
-
-const aiConversation = (id = 'ai-1'): ConversationItem => ({
+vi.mock('@/shared/store/user', () => ({ useUserStore: {} }))
+vi.mock('./api', () => ({ toolboxApi: {} }))
+const session: ChatSession = { id: 7, title: 'test', createdAt: '', updatedAt: '' }
+const message = (id: number, role: 'USER' | 'ASSISTANT'): ChatMessage => ({
   id,
-  timestamp: 2,
-  role: 'ai',
-  contentType: 'IMAGE',
-  aiResponse: {
-    status: 'GENERATING',
-    costPoints: 0,
-    generationTime: 0,
-  },
+  role,
+  type: 'TEXT',
+  content: 'saved',
+  model: 'catalog-model',
+  jobId: 3,
+  status: 'PENDING',
+  resultUrl: null,
+  errorMessage: null,
+  createdAt: '',
+})
+function setup() {
+  const api = {
+    getSessions: vi.fn().mockResolvedValue([session]),
+    createSession: vi.fn().mockResolvedValue(session),
+    getSession: vi.fn().mockResolvedValue({ session, messages: [] }),
+    sendMessage: vi.fn().mockResolvedValue({
+      userMessage: message(1, 'USER'),
+      assistantMessage: message(2, 'ASSISTANT'),
+      jobId: 3,
+    }),
+    cancelMessage: vi.fn(),
+    deleteSession: vi.fn(),
+  }
+  return { api, store: createChatStore(api, () => 'one-request-id') }
+}
+describe('server-owned conversation state', () => {
+  it('retains the same request after unclear acceptance and only retries explicitly', async () => {
+    const { api, store } = setup()
+    await store.getState().open(7)
+    api.sendMessage.mockRejectedValueOnce(new Error('network lost'))
+    await store.getState().send('hello', 'catalog-model')
+    expect(store.getState().pending?.command.clientRequestId).toBe('one-request-id')
+    expect(api.sendMessage).toHaveBeenCalledTimes(1)
+    await store.getState().retry()
+    expect(api.sendMessage.mock.calls[0]).toEqual(api.sendMessage.mock.calls[1])
+    expect(store.getState().pending).toBeNull()
+    expect(store.getState().messages.map((m) => m.id)).toEqual([1, 2])
+  })
+  it('ignores an old session response after switching and never cancels server work', async () => {
+    const { api, store } = setup()
+    let finish!: (value: unknown) => void
+    api.getSession.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        }),
+    )
+    const first = store.getState().open(7)
+    await store.getState().open(null)
+    finish({ session, messages: [message(1, 'USER')] })
+    await first
+    expect(store.getState().messages).toEqual([])
+    expect(store.getState().activeId).toBeNull()
+    expect(api.cancelMessage).not.toHaveBeenCalled()
+  })
+  it('refuses media submission while account capability is unavailable', async () => {
+    const { api, store } = setup()
+    await store.getState().open(7)
+    await store.getState().send('picture', 'unknown', 'IMAGE')
+    expect(api.sendMessage).not.toHaveBeenCalled()
+    expect(store.getState().error).toContain('暂未开放')
+  })
 })
 
-describe('toolbox store', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    userStoreState.token = ''
-    userStoreState.user = null
-    userStoreState.userId = null
-    vi.stubGlobal('localStorage', createLocalStorage())
-    useToolboxStore.getState().reset()
-  })
-
-  it('resets VIDEO input without advertising an unavailable ratio', () => {
-    useToolboxStore.getState().setCurrentInput({ duration: 20 })
-    useToolboxStore.getState().updateInputType('VIDEO')
-
-    expect(useToolboxStore.getState().currentInput).toMatchObject({
-      type: 'VIDEO',
-      model: '',
-      aspectRatio: '',
-      duration: 8,
-    })
-  })
-
-  it('keeps competition point estimates free for text and video', () => {
-    useToolboxStore.getState().setCurrentInput({
-      type: 'TEXT',
-      model: 'gemini-3.5-flash',
-      prompt: '字'.repeat(250),
-    })
-    expect(selectEstimatedCost(useToolboxStore.getState())).toBe(0)
-
-    useToolboxStore.getState().setCurrentInput({
-      type: 'VIDEO',
-      model: 'sd-api-2-fast-720p',
-      duration: 10,
-    })
-    expect(selectEstimatedCost(useToolboxStore.getState())).toBe(0)
-  })
-
-  it('adds a conversation, syncs the active session, and persists it', () => {
-    const store = useToolboxStore.getState()
-    const session = store.createSessionObject()
-    useToolboxStore.setState({ sessions: [session], activeSessionId: session.id })
-    const conversation: ConversationItem = {
-      id: 'user-1',
-      timestamp: 1,
-      role: 'user',
-      contentType: 'TEXT',
-      userInput: {
-        type: 'TEXT',
-        model: 'gemini-3.5-flash',
-        prompt: '给我一个故事',
-        estimatedCost: 1,
+describe('reload and server refresh', () => {
+  it('restores only the unresolved command after reload, never client-owned conversation history', async () => {
+    const { api } = setup()
+    const records = new Map<string, string>()
+    const storage = {
+      getItem: (key: string) => records.get(key) || null,
+      setItem: (key: string, value: string) => {
+        records.set(key, value)
+      },
+      removeItem: (key: string) => {
+        records.delete(key)
       },
     }
-
-    useToolboxStore.getState().addConversation(conversation)
-
-    const state = useToolboxStore.getState()
-    expect(state.conversations).toEqual([conversation])
-    expect(state.sessions[0].conversations).toEqual([conversation])
-    expect(state.sessions[0].title).toBe('给我一个故事')
-    expect(localStorage.setItem).toHaveBeenCalledWith(
-      'toolbox_conversations_guest',
-      expect.stringContaining('给我一个故事'),
+    const first = createChatStore(api, () => 'survives-reload', storage)
+    await first.getState().open(7)
+    api.sendMessage.mockRejectedValueOnce(new Error('closed before acceptance'))
+    await first.getState().send('hello', 'catalog-model')
+    const reopened = createChatStore(api, () => 'must-not-be-used', storage)
+    expect(reopened.getState().messages).toEqual([])
+    expect(reopened.getState().pending?.command.clientRequestId).toBe('survives-reload')
+    await reopened.getState().open(7)
+    await reopened.getState().retry()
+    expect(api.sendMessage.mock.calls[1]?.[1].clientRequestId).toBe('survives-reload')
+    expect(records.size).toBe(0)
+  })
+  it('replaces observed task status and result with authoritative server messages', async () => {
+    const { api, store } = setup()
+    await store.getState().open(7)
+    await store.getState().send('hello', 'catalog-model')
+    api.getSession.mockResolvedValue({
+      session,
+      messages: [
+        message(1, 'USER'),
+        { ...message(2, 'ASSISTANT'), status: 'SUCCEEDED', content: 'Server result' },
+      ],
+    })
+    await store.getState().refresh()
+    expect(store.getState().messages[1]?.content).toBe('Server result')
+    expect(store.getState().messages[1]?.status).toBe('SUCCEEDED')
+  })
+  it('does not let an earlier poll erase a newly accepted message', async () => {
+    const { api, store } = setup()
+    await store.getState().open(7)
+    let finish!: (value: unknown) => void
+    api.getSession.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        }),
     )
+    const oldPoll = store.getState().refresh()
+    await store.getState().send('hello', 'catalog-model')
+    finish({ session, messages: [] })
+    await oldPoll
+    expect(store.getState().messages.map((item) => item.id)).toEqual([1, 2])
   })
+})
 
-  it('merges a matching AI response and leaves state untouched for a missing id', () => {
-    const conversation = aiConversation()
-    useToolboxStore.setState({ conversations: [conversation] })
-
-    useToolboxStore.getState().updateAIResponse('ai-1', {
-      status: 'READY',
-      resultUrl: '/result.png',
-      costPoints: 12,
-    })
-    expect(useToolboxStore.getState().conversations[0].aiResponse).toMatchObject({
-      status: 'READY',
-      resultUrl: '/result.png',
-      costPoints: 12,
-      generationTime: 0,
-    })
-
-    const conversations = useToolboxStore.getState().conversations
-    useToolboxStore.getState().updateAIResponse('missing', { status: 'FAILED' })
-    expect(useToolboxStore.getState().conversations).toBe(conversations)
+describe('session lifecycle guards', () => {
+  it('coalesces concurrent first sends into one session creation', async () => {
+    const { api, store } = setup()
+    const [first, second] = await Promise.all([
+      store.getState().ensureSession('hello'),
+      store.getState().ensureSession('hello'),
+    ])
+    expect(first).toBe(second)
+    expect(api.createSession).toHaveBeenCalledTimes(1)
   })
-
-  it('creates at most ten sessions, switches sessions, and restores an empty replacement', async () => {
-    for (let index = 0; index < 12; index += 1) await useToolboxStore.getState().createSession()
-    expect(useToolboxStore.getState().sessions).toHaveLength(10)
-
-    const target = useToolboxStore.getState().sessions[1]
-    const targetConversation = aiConversation('target-ai')
-    useToolboxStore.setState((state) => ({
-      sessions: state.sessions.map((session) =>
-        session.id === target.id ? { ...session, conversations: [targetConversation] } : session,
-      ),
-    }))
-    useToolboxStore.getState().switchSession(target.id)
-    expect(useToolboxStore.getState()).toMatchObject({
-      activeSessionId: target.id,
-      conversations: [targetConversation],
-    })
-
-    useToolboxStore.getState().reset()
-    await useToolboxStore.getState().createSession()
-    const onlySessionId = useToolboxStore.getState().activeSessionId
-    expect(onlySessionId).not.toBeNull()
-    await useToolboxStore.getState().deleteSession(onlySessionId!)
-    expect(useToolboxStore.getState().sessions).toHaveLength(1)
-    expect(useToolboxStore.getState().activeSessionId).toBe(
-      useToolboxStore.getState().sessions[0].id,
-    )
-    expect(useToolboxStore.getState().conversations).toEqual([])
-  })
-
-  it('loads history as user and AI bubbles and converts SUCCEEDED to READY', () => {
-    const session = useToolboxStore.getState().createSessionObject()
-    useToolboxStore.setState({ sessions: [session], activeSessionId: session.id })
-    const historyItem: ToolboxHistoryVO = {
-      id: 42,
-      sessionId: 7,
-      type: 'IMAGE',
-      model: 'gpt-image-2-vip',
-      prompt: '一座云端城市',
-      aspectRatio: '16:9',
-      text: null,
-      resultUrl: '/cloud-city.png',
-      status: 'SUCCEEDED',
-      costPoints: 15,
-      createdAt: '2026-06-27T10:00:00',
-      expireAt: '2026-07-04T10:00:00',
-    }
-
-    useToolboxStore.getState().loadHistoryToChat(historyItem)
-
-    const conversations = useToolboxStore.getState().conversations
-    expect(conversations).toHaveLength(2)
-    expect(conversations[0]).toMatchObject({
-      role: 'user',
-      contentType: 'IMAGE',
-      userInput: { prompt: '一座云端城市', estimatedCost: 15 },
-    })
-    expect(conversations[1]).toMatchObject({
-      role: 'ai',
-      contentType: 'IMAGE',
-      aiResponse: {
-        status: 'READY',
-        resultUrl: '/cloud-city.png',
-        historyId: 42,
-      },
-    })
-  })
-
-  it('waits for server deletion and removes the linked history from state', async () => {
-    apiMocks.deleteSession.mockResolvedValue(undefined)
-    const session = {
-      ...useToolboxStore.getState().createSessionObject('远端对话'),
-      id: 'server-9',
-      remoteId: 9,
-    }
-    const historyItem = {
-      id: 42,
-      sessionId: 9,
-      type: 'TEXT',
-      model: 'gemini-3.5-flash',
-      prompt: '测试',
-      aspectRatio: null,
-      text: '结果',
-      resultUrl: null,
-      status: 'SUCCEEDED',
-      costPoints: 1,
-      createdAt: '2026-06-27T10:00:00',
-      expireAt: '2026-07-04T10:00:00',
-    } satisfies ToolboxHistoryVO
-    useToolboxStore.setState({
-      sessions: [session],
-      activeSessionId: session.id,
-      history: [historyItem],
-    })
-
-    await useToolboxStore.getState().deleteSession(session.id)
-
-    expect(apiMocks.deleteSession).toHaveBeenCalledWith(9)
-    expect(useToolboxStore.getState().history).toEqual([])
-  })
-
-  it('loads the legacy flat conversation storage format', () => {
-    const legacyConversation = aiConversation('legacy-ai')
-    localStorage.setItem('toolbox_conversations', JSON.stringify([legacyConversation]))
-
-    useToolboxStore.getState().loadConversationsFromStorage()
-
-    expect(useToolboxStore.getState().sessions).toHaveLength(1)
-    expect(useToolboxStore.getState().sessions[0].title).toBe('默认对话')
-    expect(useToolboxStore.getState().conversations).toEqual([])
-  })
-
-  it('never imports guest legacy conversations into an authenticated user cache', () => {
-    userStoreState.token = 'token-a'
-    userStoreState.userId = 101
-    localStorage.setItem('toolbox_conversations', JSON.stringify([aiConversation('guest-ai')]))
-
-    useToolboxStore.getState().loadConversationsFromStorage()
-
-    expect(useToolboxStore.getState().getConversationStorageKey()).toBe(
-      'toolbox_conversations_user_101',
-    )
-    expect(useToolboxStore.getState().conversations).toEqual([])
-    expect(useToolboxStore.getState().sessions[0].title).toBe('新对话')
+  it('keeps an unresolved request session available for reconciliation', async () => {
+    const { api, store } = setup()
+    await store.getState().open(7)
+    api.sendMessage.mockRejectedValueOnce(new Error('network'))
+    await store.getState().send('hello', 'catalog-model')
+    await store.getState().remove(7)
+    expect(api.deleteSession).not.toHaveBeenCalled()
+    expect(store.getState().pending?.sessionId).toBe(7)
   })
 })

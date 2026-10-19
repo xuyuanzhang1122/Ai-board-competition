@@ -33,17 +33,17 @@ export const router = createBrowserRouter([
               return { Component: HomePage }
             },
           },
-          {
-            path: 'toolbox',
-            lazy: async () => {
-              const { ToolboxPage } = await import('@/features/toolbox/ToolboxPage')
-              return { Component: ToolboxPage }
-            },
-          },
           { path: 'wallet', element: <Navigate replace to="/home" /> },
           { path: 'recharge', element: <Navigate replace to="/home" /> },
           { path: 'invite', element: <Placeholder phase="Phase 1" title="邀请" /> },
         ],
+      },
+      {
+        path: 'toolbox/:id?',
+        lazy: async () => {
+          const { ToolboxPage } = await import('@/features/toolbox/ToolboxPage')
+          return { Component: ToolboxPage }
+        },
       },
       {
         path: 'editor/:id',
