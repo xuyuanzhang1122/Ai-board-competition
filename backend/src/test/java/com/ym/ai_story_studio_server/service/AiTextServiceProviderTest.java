@@ -19,6 +19,28 @@ import static org.mockito.Mockito.*;
 
 class AiTextServiceProviderTest {
     @Test
+    void queuedConversationFreezesStructuredHistoryAndReloadsItWithoutBrowser() throws Exception {
+        TextGenerationProvider provider=mock(TextGenerationProvider.class);
+        ChargingService charging=mock(ChargingService.class);
+        JobMapper jobs=mock(JobMapper.class);
+        when(jobs.insert(any(Job.class))).thenAnswer(i->{i.<Job>getArgument(0).setId(44L);return 1;});
+        var service=new AiTextService(provider,charging,jobs,new AiProperties(),new ObjectMapper(),Runnable::run);
+        var turns=java.util.List.of(new TextGenerationProvider.ChatTurn("user","苹果"),
+                new TextGenerationProvider.ChatTurn("assistant","记住了"),new TextGenerationProvider.ChatTurn("user","什么水果"));
+        Job job=service.createQueuedConversationJob(1L,"deepseek-flash",turns);
+        when(jobs.selectById(44L)).thenReturn(job);
+        when(jobs.claimPendingTextJob(44L,1L,0L)).thenReturn(1);
+        when(charging.charge(any())).thenReturn(ChargingService.ChargingResult.builder().totalCost(0).build());
+        when(provider.generateConversation(anyList(),any(),any(),any(),any()))
+                .thenReturn(new TextGenerationResult("苹果","deepseek-flash","DEEPSEEK","req",3,2,1,null));
+        service.executeQueuedTextJob(44L,1L,0L);
+        verify(provider).generateConversation(eq(turns),eq("deepseek-flash"),any(),any(),any());
+        verify(provider,never()).generateText(any(),any(),any(),any(),any());
+        assertThat(job.getStatus()).isEqualTo("SUCCEEDED");
+        assertThat(new ObjectMapper().readTree(job.getMetaJson()).path("textSnapshot").path("version").asInt()).isEqualTo(2);
+    }
+
+    @Test
     void queuedTaskFreezesInputAndParametersAndUsesTheSameJob() throws Exception {
         TextGenerationProvider provider = mock(TextGenerationProvider.class);
         ChargingService charging = mock(ChargingService.class);

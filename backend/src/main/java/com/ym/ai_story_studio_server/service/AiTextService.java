@@ -141,6 +141,19 @@ public class AiTextService {
         return createJob(userId, projectId, snapshot, "PARSE_TEXT", "PENDING");
     }
 
+    /** Called inside the chat acceptance transaction; dispatch is owned by the durable poller. */
+    public Job createQueuedConversationJob(Long userId, String model,
+            java.util.List<TextGenerationProvider.ChatTurn> messages) {
+        if (messages == null || messages.isEmpty() || !"user".equals(messages.get(messages.size()-1).role())) {
+            throw new BusinessException(ResultCode.PARAM_INVALID, "对话上下文无效");
+        }
+        String prompt = messages.get(messages.size()-1).content();
+        TextTaskSnapshot defaults = prepareSnapshot(new TextGenerateRequest(prompt, null, null, null, model));
+        TextTaskSnapshot snapshot = new TextTaskSnapshot(2, defaults.model(), prompt, defaults.maxTokens(),
+                defaults.temperature(), defaults.topP(), messages);
+        return createJob(userId, null, snapshot, "TEXT_GENERATION", "PENDING");
+    }
+
     private TextTaskSnapshot prepareSnapshot(TextGenerateRequest request) {
         AiProperties.Text config = aiProperties.getText();
         String model = request.model() != null ? request.model() : config.getModel();
@@ -167,7 +180,7 @@ public class AiTextService {
         try {
             var metadata = objectMapper.readTree(job.getMetaJson());
             snapshot = objectMapper.treeToValue(metadata.path("textSnapshot"), TextTaskSnapshot.class);
-            if (snapshot == null || snapshot.version() != 1
+            if (snapshot == null || (snapshot.version() != 1 && snapshot.version() != 2)
                     || !Objects.equals(metadata.path("model").asText(null), snapshot.model())) {
                 throw new BusinessException(ResultCode.PARAM_INVALID, "文本任务快照不受支持，请重新提交");
             }
@@ -193,8 +206,9 @@ public class AiTextService {
                     .jobId(jobId).bizType("TEXT_GENERATION").modelCode(snapshot.model())
                     .quantity(1).metaData(metadata).build());
             job.setCostPoints(charge.getTotalCost());
-            TextGenerationResult result = textProvider.generateText(snapshot.prompt(), snapshot.model(),
-                    snapshot.maxTokens(), snapshot.temperature(), snapshot.topP());
+            TextGenerationResult result = snapshot.version() == 2
+                    ? textProvider.generateConversation(snapshot.messages(), snapshot.model(), snapshot.maxTokens(), snapshot.temperature(), snapshot.topP())
+                    : textProvider.generateText(snapshot.prompt(), snapshot.model(), snapshot.maxTokens(), snapshot.temperature(), snapshot.topP());
             updateJobSuccess(job, snapshot.model(), snapshot.prompt(), result.text(),
                     result.tokensUsed() == null ? 0 : result.tokensUsed(), result);
         } catch (Exception e) {
