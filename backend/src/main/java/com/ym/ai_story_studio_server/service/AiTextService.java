@@ -11,14 +11,16 @@ import com.ym.ai_story_studio_server.entity.Job;
 import com.ym.ai_story_studio_server.exception.BusinessException;
 import com.ym.ai_story_studio_server.mapper.JobMapper;
 import com.ym.ai_story_studio_server.util.UserContext;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 
 /**
  * AI文本生成服务
@@ -73,7 +75,6 @@ import java.util.Objects;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class AiTextService {
 
     private final TextGenerationProvider textProvider;
@@ -81,9 +82,22 @@ public class AiTextService {
     private final JobMapper jobMapper;
     private final AiProperties aiProperties;
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+    private final Executor textTaskExecutor;
+
+    public AiTextService(TextGenerationProvider textProvider, ChargingService chargingService,
+                         JobMapper jobMapper, AiProperties aiProperties,
+                         com.fasterxml.jackson.databind.ObjectMapper objectMapper,
+                         @Qualifier("textTaskExecutor") Executor textTaskExecutor) {
+        this.textProvider = textProvider;
+        this.chargingService = chargingService;
+        this.jobMapper = jobMapper;
+        this.aiProperties = aiProperties;
+        this.objectMapper = objectMapper;
+        this.textTaskExecutor = textTaskExecutor;
+    }
 
     /**
-     * 异步生成文本（工具箱使用）
+     * 异步提交文本任务（服务层入口）
      *
      * <p>立即返回jobId，在后台异步处理生成任务
      *
@@ -100,8 +114,15 @@ public class AiTextService {
         Job job = createJob(userId, request.projectId(), snapshot, "TEXT_GENERATION", "PENDING");
         log.info("Job created - jobId: {}, jobType: TEXT_GENERATION", job.getId());
 
-        // 3. 异步执行生成
-        executeTextGenerationAsync(job.getId(), request);
+        // Dispatch identifiers only; the worker reloads the saved snapshot.
+        try {
+            textTaskExecutor.execute(() -> executeQueuedTextJob(job.getId(), userId, job.getProjectId()));
+        } catch (RejectedExecutionException e) {
+            jobMapper.failPendingTextJob(job.getId(), userId, job.getProjectId(),
+                    "文本任务队列已满或正在关闭，请重新提交");
+            throw new BusinessException(ResultCode.SYSTEM_ERROR,
+                    "文本任务暂时无法受理，请稍后重试（任务 ID：" + job.getId() + "）");
+        }
 
         // 4. 立即返回jobId
         return new TextGenerateResponse(
@@ -111,15 +132,6 @@ public class AiTextService {
                 null,  // costPoints将在生成完成后计算
                 job.getId()  // 返回jobId
         );
-    }
-
-    /**
-     * 异步执行文本生成任务
-     */
-    @org.springframework.scheduling.annotation.Async("taskExecutor")
-    public void executeTextGenerationAsync(Long jobId, TextGenerateRequest ignoredRequest) {
-        Job job = jobMapper.selectById(jobId);
-        if (job != null) executeQueuedTextJob(jobId, job.getUserId(), job.getProjectId());
     }
 
     public Job createQueuedParsingJob(Long userId, Long projectId, String prompt) {

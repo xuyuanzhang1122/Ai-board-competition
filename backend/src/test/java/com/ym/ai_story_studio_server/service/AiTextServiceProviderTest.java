@@ -31,7 +31,7 @@ class AiTextServiceProviderTest {
             invocation.<Job>getArgument(0).setId(12L);
             return 1;
         });
-        AiTextService service = new AiTextService(provider, charging, jobs, settings, new ObjectMapper());
+        AiTextService service = new AiTextService(provider, charging, jobs, settings, new ObjectMapper(), Runnable::run);
         Job queued = service.createQueuedParsingJob(1L, 7L, "原始八仙过海创作输入");
         when(jobs.selectById(12L)).thenReturn(queued);
         when(jobs.claimPendingTextJob(12L, 1L, 7L)).thenReturn(1);
@@ -58,7 +58,7 @@ class AiTextServiceProviderTest {
         TextGenerationProvider provider = mock(TextGenerationProvider.class);
         ChargingService charging = mock(ChargingService.class);
         JobMapper jobs = mock(JobMapper.class);
-        AiTextService service = new AiTextService(provider, charging, jobs, new AiProperties(), new ObjectMapper());
+        AiTextService service = new AiTextService(provider, charging, jobs, new AiProperties(), new ObjectMapper(), Runnable::run);
         Job job = queuedFixture();
         when(jobs.selectById(12L)).thenReturn(job);
         for (String state : new String[]{"SUCCEEDED", "FAILED", "CANCELED", "RUNNING"}) {
@@ -79,7 +79,7 @@ class AiTextServiceProviderTest {
         ChargingService charging = mock(ChargingService.class);
         JobMapper jobs = mock(JobMapper.class);
         when(jobs.selectById(12L)).thenReturn(queuedFixture());
-        AiTextService service = new AiTextService(provider, charging, jobs, new AiProperties(), new ObjectMapper());
+        AiTextService service = new AiTextService(provider, charging, jobs, new AiProperties(), new ObjectMapper(), Runnable::run);
         assertThatThrownBy(() -> service.executeQueuedTextJob(12L, 2L, 7L)).isInstanceOf(BusinessException.class);
         assertThatThrownBy(() -> service.executeQueuedTextJob(12L, 1L, 8L)).isInstanceOf(BusinessException.class);
         verifyNoInteractions(provider, charging);
@@ -111,7 +111,7 @@ class AiTextServiceProviderTest {
         when(provider.generateText(any(), any(), any(), any(), any()))
                 .thenReturn(new TextGenerationResult("草稿", "actual-revision", "DEEPSEEK", "req-1", null));
         ObjectMapper mapper = new ObjectMapper();
-        AiTextService service = new AiTextService(provider, charging, jobs, new AiProperties(), mapper);
+        AiTextService service = new AiTextService(provider, charging, jobs, new AiProperties(), mapper, Runnable::run);
         service.generateText(new TextGenerateRequest("八仙过海", null, null, 1L));
         var captor = org.mockito.ArgumentCaptor.forClass(Job.class);
         verify(jobs).finishClaimedTextJob(captor.capture());
@@ -135,14 +135,14 @@ class AiTextServiceProviderTest {
         AiTextService service = new AiTextService(new OfficialTextProvider(properties,
                 mock(com.ym.ai_story_studio_server.provider.TextModelAccess.class),
                 mock(com.ym.ai_story_studio_server.budget.TextBudgetPolicy.class),
-                mock(com.ym.ai_story_studio_server.budget.TextBudgetLedger.class)), charging, jobs, settings, new ObjectMapper());
+                mock(com.ym.ai_story_studio_server.budget.TextBudgetLedger.class)), charging, jobs, settings, new ObjectMapper(), Runnable::run);
         TextGenerateRequest request = new TextGenerateRequest("八仙过海", null, null, 1L);
         assertThatThrownBy(() -> service.generateText(request)).isInstanceOf(BusinessException.class);
         verifyNoInteractions(charging, jobs);
     }
 
     @Test
-    void restoredOldTaskCannotUseNewRequestModelToBypassValidation() {
+    void queuedLegacyTaskWithoutSnapshotFailsBeforeProviderCall() {
         TextGenerationProvider provider = mock(TextGenerationProvider.class);
         ChargingService charging = mock(ChargingService.class);
         JobMapper jobs = mock(JobMapper.class);
@@ -155,8 +155,8 @@ class AiTextServiceProviderTest {
         historical.setMetaJson("{\"model\":\"gemini-3.5-flash\"}");
         when(jobs.selectById(12L)).thenReturn(historical);
         doThrow(new BusinessException(ResultCode.PARAM_INVALID)).when(provider).validateModelConfiguration("gemini-3.5-flash");
-        AiTextService service = new AiTextService(provider, charging, jobs, new AiProperties(), new ObjectMapper());
-        service.executeTextGenerationAsync(12L, new TextGenerateRequest("八仙过海", null, null, 1L, "deepseek-flash"));
+        AiTextService service = new AiTextService(provider, charging, jobs, new AiProperties(), new ObjectMapper(), Runnable::run);
+        service.executeQueuedTextJob(12L, 1L, 7L);
         verify(jobs).failPendingTextJob(eq(12L), eq(1L), eq(7L), anyString());
         verifyNoInteractions(charging);
         verify(provider, never()).generateText(any(), any(), any(), any(), any());
@@ -180,7 +180,7 @@ class AiTextServiceProviderTest {
         TextGenerationProvider provider = mock(TextGenerationProvider.class);
         ChargingService charging = mock(ChargingService.class);
         JobMapper jobs = mock(JobMapper.class);
-        AiTextService service = new AiTextService(provider, charging, jobs, new AiProperties(), new ObjectMapper());
+        AiTextService service = new AiTextService(provider, charging, jobs, new AiProperties(), new ObjectMapper(), Runnable::run);
         TextGenerateRequest request = new TextGenerateRequest("八仙过海", null, null, 1L, "gemini-3.5-flash");
         doThrow(new BusinessException(ResultCode.PARAM_INVALID)).when(provider).validateModelConfiguration("gemini-3.5-flash");
         assertThatThrownBy(() -> service.generateText(request)).isInstanceOf(BusinessException.class);
