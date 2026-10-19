@@ -25,7 +25,7 @@ describe('model config store', () => {
   })
 
   it('clears retired media defaults, saved preferences and project overrides', () => {
-    localStorage.setItem('competition_model_config_v1', JSON.stringify({
+    localStorage.setItem('competition_model_config_v2', JSON.stringify({
       languageModel: 'mimo-v2.6-pro',
       characterImageModel: 'gemini-3-pro-image-preview',
       sceneImageModel: 'gpt-image-2',
@@ -57,18 +57,18 @@ describe('model config store', () => {
     )
   })
 
-  it('clears obsolete or malformed preferences', () => {
+  it('clears malformed preferences', () => {
     localStorage.setItem(
-      'competition_model_config_v1',
+      'competition_model_config_v2',
       JSON.stringify({
-        languageModel: 'deepseek-v4-flash',
+        languageModel: 'invalid model id',
         sceneImageModel: 'scene-custom',
       }),
     )
     const state = createModelConfigStore().getState()
     expect(state.languageModel).toBe('')
     expect(state.sceneImageModel).toBe('')
-    state.updateConfig({ languageModel: 'gemini-3.5-flash' })
+    state.updateConfig({ languageModel: '<invalid>' })
     expect(createModelConfigStore().getState().languageModel).toBe('')
   })
 
@@ -85,7 +85,7 @@ describe('model config store', () => {
     const useStore = createModelConfigStore()
     useStore.getState().updateConfig({ languageModel: 'mimo-v2.6-pro' })
 
-    const raw = globalThis.localStorage?.getItem('competition_model_config_v1')
+    const raw = globalThis.localStorage?.getItem('competition_model_config_v2')
     expect(raw).toBeTruthy()
     const parsed = JSON.parse(raw!) as ModelConfigData
     expect(parsed.languageModel).toBe('mimo-v2.6-pro')
@@ -94,7 +94,7 @@ describe('model config store', () => {
 
   it('loads persisted values on creation', () => {
     globalThis.localStorage?.setItem(
-      'competition_model_config_v1',
+      'competition_model_config_v2',
       JSON.stringify({ sceneImageModel: 'scene-custom' }),
     )
 
@@ -111,7 +111,7 @@ describe('model config store', () => {
     const state = useStore.getState()
     expect(state.shotImageModel).toBe(DEFAULT_MODEL_CONFIG.shotImageModel)
 
-    const raw = globalThis.localStorage?.getItem('competition_model_config_v1')
+    const raw = globalThis.localStorage?.getItem('competition_model_config_v2')
     expect(JSON.parse(raw!).shotImageModel).toBe(
       DEFAULT_MODEL_CONFIG.shotImageModel,
     )

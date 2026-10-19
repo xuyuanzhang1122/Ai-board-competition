@@ -1,26 +1,19 @@
 package com.ym.ai_story_studio_server.provider;
 
+import com.ym.ai_story_studio_server.entity.AiModel;
 import com.ym.ai_story_studio_server.common.ResultCode;
 import com.ym.ai_story_studio_server.exception.BusinessException;
 
-import java.util.Map;
-
-/** Catalog code, upstream API ID and supplier identity are distinct fields. */
+/** Identity derives from an upstream-synced row, never a hardcoded model-id whitelist. */
 public final class TextModelRegistry {
     private TextModelRegistry() {}
-
-    public record Definition(String code, String apiModelId, String provider) {}
-
-    private static final Map<String, Definition> MODELS = Map.of(
-            "deepseek-flash", new Definition("deepseek-flash", "deepseek-flash", "DeepSeek"),
-            "deepseek-v4-pro", new Definition("deepseek-v4-pro", "deepseek-v4-pro", "DeepSeek"),
-            "mimo-v2.6-pro", new Definition("mimo-v2.6-pro", "mimo-v2.6-pro", "MiMo"));
-
-    public static Definition require(String code) {
-        Definition definition = code == null ? null : MODELS.get(code);
-        if (definition == null) {
-            throw new BusinessException(ResultCode.PARAM_INVALID, "文本模型已停用或不受支持，请重新选择");
-        }
-        return definition;
+    public record Definition(String code,String apiModelId,String provider) {}
+    public static Definition require(AiModel row) {
+        boolean official=row!=null && Integer.valueOf(1).equals(row.getUpstreamPresent())
+            && ("DeepSeek".equals(row.getProvider()) && "https://api.deepseek.com/models".equals(row.getSourceUrl())
+                || "MiMo".equals(row.getProvider()) && java.util.Set.of("https://api.xiaomimimo.com/v1/models","https://token-plan-cn.xiaomimimo.com/v1/models").contains(row.getSourceUrl()==null?"":row.getSourceUrl()));
+        if(!official || !"LANGUAGE".equals(row.getType()) || row.getCode()==null || row.getCode().isBlank())
+            throw new BusinessException(ResultCode.PARAM_INVALID,"所选模型不在当前官方文本目录中，请刷新目录");
+        return new Definition(row.getCode(),row.getCode(),row.getProvider());
     }
 }

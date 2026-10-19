@@ -17,5 +17,15 @@ import org.apache.ibatis.annotations.Mapper;
  */
 @Mapper
 public interface AiModelMapper extends BaseMapper<AiModel> {
+    @org.apache.ibatis.annotations.Update("""
+        UPDATE ai_models SET enabled=#{enabled},sort_order=#{sortOrder},updated_at=CURRENT_TIMESTAMP(3)
+        WHERE id=#{id} AND upstream_present=1 AND catalog_revision=#{revision}
+          AND (#{enabled}=0 OR type='LANGUAGE')
+        """)
+    int updateCatalogSettings(@org.apache.ibatis.annotations.Param("id") Long id,
+        @org.apache.ibatis.annotations.Param("revision") String revision,
+        @org.apache.ibatis.annotations.Param("enabled") Integer enabled,
+        @org.apache.ibatis.annotations.Param("sortOrder") Integer sortOrder);
+
 }
 // {{END_MODIFICATIONS}}

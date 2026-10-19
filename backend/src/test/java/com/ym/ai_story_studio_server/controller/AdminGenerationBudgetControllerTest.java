@@ -29,7 +29,7 @@ class AdminGenerationBudgetControllerTest {
         active.setId(42L); active.setStatus(1);
         when(users.selectById(42L)).thenReturn(active);
         var props = new JwtProperties();
-        var mvc = MockMvcBuilders.standaloneSetup(new AdminGenerationBudgetController(ledger))
+        var mvc = MockMvcBuilders.standaloneSetup(new AdminGenerationBudgetController(ledger,new com.ym.ai_story_studio_server.provider.TextProviderProperties()))
                 .addInterceptors(new JwtInterceptor(jwt, props, new ObjectMapper(), users)).build();
         when(ledger.status()).thenReturn(new TextBudgetLedger.Status(new BigDecimal("20"), BigDecimal.ZERO,
                 new BigDecimal("20"), null, 0));
@@ -57,7 +57,7 @@ class AdminGenerationBudgetControllerTest {
         var active = new com.ym.ai_story_studio_server.entity.User();
         active.setId(42L); active.setStatus(1);
         when(users.selectById(42L)).thenReturn(active);
-        var mvc = MockMvcBuilders.standaloneSetup(new AdminGenerationBudgetController(ledger), new UserProbe())
+        var mvc = MockMvcBuilders.standaloneSetup(new AdminGenerationBudgetController(ledger,new com.ym.ai_story_studio_server.provider.TextProviderProperties()), new UserProbe())
                 .addInterceptors(new JwtInterceptor(jwt, props, new ObjectMapper(), users)).build();
         when(ledger.status()).thenReturn(new TextBudgetLedger.Status(new BigDecimal("20"), BigDecimal.ZERO,
                 new BigDecimal("20"), null, 0));

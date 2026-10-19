@@ -13,14 +13,20 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class TextModelAccess {
     private final AiModelMapper mapper;
+    private final OfficialModelCatalog catalog;
+
+    public TextModelRegistry.Definition definition(String code) {
+        catalog.refreshIfStale();
+        AiModel row=mapper.selectOne(new LambdaQueryWrapper<AiModel>().eq(AiModel::getCode,code));
+        if(row==null || !java.util.Objects.equals(code,row.getCode()))
+            throw new BusinessException(ResultCode.CONFIG_ERROR,"模型不在当前上游目录中");
+        return TextModelRegistry.require(row);
+    }
 
     public void requireEnabled(String code) {
-        var definition = TextModelRegistry.require(code);
-        AiModel row = mapper.selectOne(new LambdaQueryWrapper<AiModel>().eq(AiModel::getCode, code));
-        if (row == null || !code.equals(row.getCode()) || !Integer.valueOf(1).equals(row.getEnabled())
-                || row.getType() == null || !"LANGUAGE".equalsIgnoreCase(row.getType().trim())
-                || row.getProvider() == null || !definition.provider().equalsIgnoreCase(row.getProvider().trim())) {
-            throw new BusinessException(ResultCode.CONFIG_ERROR, "所选文本模型未启用或目录配置不匹配");
-        }
+        definition(code);
+        AiModel row=mapper.selectOne(new LambdaQueryWrapper<AiModel>().eq(AiModel::getCode,code));
+        if(row==null || !Integer.valueOf(1).equals(row.getEnabled()))
+            throw new BusinessException(ResultCode.CONFIG_ERROR,"所选文本模型未启用");
     }
 }

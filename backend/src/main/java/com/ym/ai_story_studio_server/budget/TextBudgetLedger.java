@@ -33,6 +33,29 @@ public class TextBudgetLedger {
         MODEL_MISMATCH, USAGE_OUT_OF_BOUNDS, INCONSISTENT_USAGE, INVALID_USAGE, AUDIT_WRITE_FAILED
     }
 
+    public String beginUnrestricted(String model,Long userId) {
+        if(userId==null || userId<=0 || model==null || model.isBlank())
+            throw new BusinessException(ResultCode.CONFIG_ERROR,"文本调用审计归属无效");
+        String id=UUID.randomUUID().toString();
+        independent.executeWithoutResult(tx -> jdbc.update(
+            "INSERT INTO text_call_audits(id,user_id,model_code,status) VALUES(?,?,?,'STARTED')",id,userId,model));
+        return id;
+    }
+
+    public void completeUnrestricted(String id,Usage usage,ReviewReason reason) {
+        Usage observed=usage==null?new Usage(null,null,null,null,null):usage;
+        independent.executeWithoutResult(tx -> {
+            int changed=jdbc.update("""
+                UPDATE text_call_audits SET status=?,response_model=?,provider_request_id=?,
+                    input_tokens=?,output_tokens=?,total_tokens=?,review_reason=?,finished_at=CURRENT_TIMESTAMP(3)
+                WHERE id=? AND status='STARTED'
+                """, reason==null?"SUCCEEDED":"REVIEW_REQUIRED",bounded(observed.responseModel(),128),
+                bounded(observed.requestId(),256),observed.inputTokens(),observed.outputTokens(),observed.totalTokens(),
+                reason==null?null:reason.name(),id);
+            if(changed!=1) throw new BusinessException(ResultCode.SYSTEM_ERROR,"文本调用审计未能保存，请核对任务");
+        });
+    }
+
     public Reservation reserve(TextBudgetPolicy.Quote quote, Long userId) {
         if (userId == null || userId <= 0 || quote == null || quote.ceilingCny() == null
                 || quote.ceilingCny().signum() <= 0 || quote.ceilingCny().scale() > 6) {

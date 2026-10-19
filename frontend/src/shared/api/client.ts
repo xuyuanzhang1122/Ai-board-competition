@@ -11,6 +11,16 @@ const api: AxiosInstance = axios.create({
   timeout: API_CONFIG.timeout,
 })
 
+// Preserve explicit server rejection codes for idempotent request recovery.
+export class ApiBusinessError extends Error {
+  readonly code: number
+  constructor(code: number, message: string) {
+    super(message)
+    this.name = 'ApiBusinessError'
+    this.code = code
+  }
+}
+
 // 将技术性错误转换为用户友好的提示
 const friendlyErrorMessage = (msg: string): string => {
   if (msg.includes('I/O error') || msg.includes('GOAWAY') || msg.includes('Connection refused')) {
@@ -58,7 +68,7 @@ api.interceptors.response.use(
     const friendlyMsg = friendlyErrorMessage(msg || '操作失败')
     console.error('[API Error]', msg)
     message.error(friendlyMsg)
-    return Promise.reject(new Error(friendlyMsg))
+    return Promise.reject(new ApiBusinessError(code, friendlyMsg))
   },
   (error: AxiosError) => {
     if (error.response?.status === 401) {

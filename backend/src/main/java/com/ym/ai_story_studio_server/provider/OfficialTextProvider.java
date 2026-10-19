@@ -77,7 +77,9 @@ public class OfficialTextProvider implements TextGenerationProvider, DisposableB
     }
 
     private boolean isDeepseek(String model) {
-        return "DeepSeek".equals(TextModelRegistry.require(model).provider());
+        var definition=modelAccess.definition(model);
+        if(definition==null) throw new BusinessException(ResultCode.PARAM_INVALID,"模型不在官方文本目录中");
+        return "DeepSeek".equals(definition.provider());
     }
 
     @Override
@@ -113,13 +115,24 @@ public class OfficialTextProvider implements TextGenerationProvider, DisposableB
     @Override
     public TextGenerationResult generateText(String prompt, String model, Integer maxTokens,
                                               Double temperature, Double topP) {
-        validateRequest(prompt, model, maxTokens, temperature, topP);
+        return generateConversation(List.of(new ChatTurn("user", prompt)),model,maxTokens,temperature,topP);
+    }
+
+    @Override
+    public TextGenerationResult generateConversation(List<ChatTurn> messages,String model,Integer maxTokens,
+                                                      Double temperature,Double topP) {
+        if(messages==null || messages.isEmpty() || messages.size()>200
+                || messages.stream().anyMatch(turn -> turn==null || !Set.of("user","assistant").contains(turn.role()==null?"":turn.role())
+                    || turn.content()==null || turn.content().isBlank())
+                || !"user".equals(messages.get(messages.size()-1).role()))
+            throw new BusinessException(ResultCode.PARAM_INVALID,"对话上下文格式无效");
+        validateRequest(messages.get(messages.size()-1).content(),model,maxTokens,temperature,topP);
         boolean deepseek = isDeepseek(model);
         TextProviderProperties.Endpoint endpoint = deepseek ? properties.getDeepseek() : properties.getMimo();
         String supplier = deepseek ? "DEEPSEEK" : "MIMO";
         Map<String, Object> body = new HashMap<>();
-        body.put("model", TextModelRegistry.require(model).apiModelId());
-        body.put("messages", List.of(Map.of("role", "user", "content", prompt)));
+        body.put("model", modelAccess.definition(model).apiModelId());
+        body.put("messages",messages.stream().map(turn -> Map.of("role",turn.role(),"content",turn.content())).toList());
         body.put("stream", false);
         body.put(deepseek ? "max_tokens" : "max_completion_tokens", maxTokens);
         if (temperature != null) body.put("temperature", temperature);
@@ -129,6 +142,8 @@ public class OfficialTextProvider implements TextGenerationProvider, DisposableB
 
         var reservation = properties.isUnlimitedText() ? null
                 : budgetLedger.reserve(budgetPolicy.quote(model, maxTokens), UserContext.getUserId());
+        String unrestrictedAuditId=reservation==null
+                ? budgetLedger.beginUnrestricted(model,UserContext.getUserId()) : null;
         TextGenerationResult result;
         TextBudgetLedger.Usage observed = null;
         boolean invalidUsage = false;
@@ -164,30 +179,37 @@ public class OfficialTextProvider implements TextGenerationProvider, DisposableB
                     root.path("model").asText(null), supplier, root.path("id").asText(null), tokens,
                     input, output, reservation == null ? null : reservation.id());
         } catch (BusinessException e) {
-            markReview(reservation, TextBudgetLedger.ReviewReason.INVALID_RESPONSE, observed);
+            markReview(reservation, unrestrictedAuditId, TextBudgetLedger.ReviewReason.INVALID_RESPONSE, observed);
             throw e;
         } catch (RestClientException e) {
             // Transport may fail after acceptance: do not submit again or expose request/error bodies.
-            markReview(reservation, TextBudgetLedger.ReviewReason.TRANSPORT_ERROR, observed);
+            markReview(reservation, unrestrictedAuditId, TextBudgetLedger.ReviewReason.TRANSPORT_ERROR, observed);
             throw new BusinessException(ResultCode.AI_SERVICE_ERROR, "文本请求未完成，请核对任务后再尝试");
         } catch (Exception e) {
-            markReview(reservation, TextBudgetLedger.ReviewReason.INVALID_RESPONSE, observed);
+            markReview(reservation, unrestrictedAuditId, TextBudgetLedger.ReviewReason.INVALID_RESPONSE, observed);
             throw new BusinessException(ResultCode.AI_SERVICE_ERROR, "文本供应商响应无法解析");
         }
         try {
-            if (reservation == null) return result;
+            if (reservation == null) {
+                budgetLedger.completeUnrestricted(unrestrictedAuditId,observed,
+                        invalidUsage?TextBudgetLedger.ReviewReason.INVALID_USAGE:null);
+                return result;
+            }
             if (invalidUsage) budgetLedger.recordReview(reservation, observed, TextBudgetLedger.ReviewReason.INVALID_USAGE);
             else budgetLedger.complete(reservation, observed);
         } catch (RuntimeException auditFailure) {
-            markReview(reservation, TextBudgetLedger.ReviewReason.AUDIT_WRITE_FAILED, observed);
+            markReview(reservation, unrestrictedAuditId, TextBudgetLedger.ReviewReason.AUDIT_WRITE_FAILED, observed);
             throw new BusinessException(ResultCode.SYSTEM_ERROR, "文本调用已返回但预算审计保存失败，请核对预留记录");
         }
         return result;
     }
 
-    private void markReview(TextBudgetLedger.Reservation reservation, TextBudgetLedger.ReviewReason reason,
+    private void markReview(TextBudgetLedger.Reservation reservation, String unrestrictedAuditId, TextBudgetLedger.ReviewReason reason,
                             TextBudgetLedger.Usage observed) {
-        if (reservation == null) return;
+        if (reservation == null) {
+            budgetLedger.completeUnrestricted(unrestrictedAuditId,observed,reason);
+            return;
+        }
         try {
             if (observed == null) budgetLedger.requireReview(reservation, reason);
             else budgetLedger.recordReview(reservation, observed, reason);

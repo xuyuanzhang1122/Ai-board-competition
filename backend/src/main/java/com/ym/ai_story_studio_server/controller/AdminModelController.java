@@ -22,6 +22,13 @@ import java.util.Map;
 public class AdminModelController {
 
     private final AdminModelService adminModelService;
+    private final com.ym.ai_story_studio_server.provider.OfficialModelCatalog catalog;
+
+    @PostMapping("/sync")
+    public Result<List<AiModel>> sync() {
+        catalog.refresh();
+        return Result.success(adminModelService.listModels(null));
+    }
 
     /**
      * 模型列表（含未启用），可按 type 过滤

@@ -52,7 +52,9 @@ class TextBudgetFlowTest {
         properties.getDeepseek().setEnabled(true); properties.getDeepseek().setApiKey("test-only-key");
         var builder = RestClient.builder();
         server = MockRestServiceServer.bindTo(builder).build();
-        provider = new OfficialTextProvider(properties, builder, mock(TextModelAccess.class), policy, ledger);
+        var access=mock(TextModelAccess.class);
+        org.mockito.Mockito.when(access.definition("deepseek-flash")).thenReturn(new TextModelRegistry.Definition("deepseek-flash","deepseek-flash","DeepSeek"));
+        provider = new OfficialTextProvider(properties, builder, access, policy, ledger);
         UserContext.setUserId(42L);
     }
 

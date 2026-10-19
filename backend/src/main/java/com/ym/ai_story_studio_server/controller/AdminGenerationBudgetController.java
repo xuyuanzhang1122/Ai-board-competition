@@ -13,9 +13,14 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class AdminGenerationBudgetController {
     private final TextBudgetLedger ledger;
+    private final com.ym.ai_story_studio_server.provider.TextProviderProperties properties;
+    public record View(boolean textLimitEnforced,java.math.BigDecimal limitCny,java.math.BigDecimal reservedCny,
+        java.math.BigDecimal remainingCny,String blockedReason,long unresolvedCount) {}
 
     @GetMapping
-    public Result<TextBudgetLedger.Status> status() {
-        return Result.success(ledger.status());
+    public Result<View> status() {
+        var historical=ledger.status();
+        return Result.success(new View(!properties.isUnlimitedText(),historical.limitCny(),historical.reservedCny(),
+            historical.remainingCny(),historical.blockedReason(),historical.unresolvedCount()));
     }
 }

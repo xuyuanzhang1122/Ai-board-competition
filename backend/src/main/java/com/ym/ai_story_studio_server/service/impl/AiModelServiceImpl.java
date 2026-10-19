@@ -33,15 +33,17 @@ import java.util.stream.Collectors;
 public class AiModelServiceImpl implements AiModelService {
 
     private final AiModelMapper aiModelMapper;
+    private final com.ym.ai_story_studio_server.provider.OfficialModelCatalog catalog;
     private final TextModelPolicy textModelPolicy;
 
     @Override
     public List<ModelVO> getEnabledModelsByType(String type) {
+        catalog.refreshIfStale();
         log.info("[AiModelService] 查询模型类型: {}", type);
 
         QueryWrapper<AiModel> queryWrapper = new QueryWrapper<>();
         queryWrapper.eq("type", type)
-                    .eq("enabled", 1)
+                    .eq("enabled", 1).eq("upstream_present", 1)
                     .orderByAsc("sort_order");
 
         List<AiModel> models = aiModelMapper.selectList(queryWrapper);

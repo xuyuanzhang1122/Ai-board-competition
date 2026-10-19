@@ -57,11 +57,7 @@ export const DEFAULT_VIDEO_CAPABILITY: VideoCapability = {
   resolutions: [],
 }
 
-export const TEXT_CAPABILITY_BY_CODE: Record<string, TextCapability> = {
-  'deepseek-flash': { costPerToken: 0, description: 'DeepSeek 文本生成', name: 'DeepSeek Flash' },
-  'deepseek-v4-pro': { costPerToken: 0, description: 'DeepSeek 文本生成', name: 'DeepSeek V4 Pro' },
-  'mimo-v2.6-pro': { costPerToken: 0, description: 'MiMo 文本生成', name: 'MiMo V2.6 Pro' },
-}
+export const TEXT_CAPABILITY_BY_CODE: Record<string, TextCapability> = {}
 
 // No media model is available until official capability, account and budget verification.
 export const IMAGE_CAPABILITY_BY_CODE: Record<string, ImageCapability> = {}

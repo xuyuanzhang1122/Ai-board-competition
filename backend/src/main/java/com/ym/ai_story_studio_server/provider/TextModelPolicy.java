@@ -17,7 +17,7 @@ public class TextModelPolicy {
             throw new BusinessException(ResultCode.CONFIG_ERROR,
                     "图片/视频新供应商尚未完成接入与预算核验，不能启用");
         }
-        var definition = TextModelRegistry.require(model.getCode());
+        var definition = TextModelRegistry.require(model);
         if (model.getProvider() == null || !definition.provider().equalsIgnoreCase(model.getProvider().trim())) {
             throw new BusinessException(ResultCode.PARAM_INVALID, "文本模型与供应商不匹配");
         }

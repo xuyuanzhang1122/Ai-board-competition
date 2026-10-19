@@ -35,6 +35,13 @@ describe('model api', () => {
     expect(result).toEqual(models)
   })
 
+  it('keeps newly discovered upstream text models without a fixed code whitelist', async () => {
+    const client = (await import('@/shared/api/client')).default
+    const models = [{ id: 20, code: 'mimo-v2.6-flash', name: 'mimo-v2.6-flash', type: 'LANGUAGE', provider: 'MiMo', enabled: 1 }]
+    vi.mocked(client.get).mockResolvedValueOnce(models)
+    expect(await modelApi.getModels('LANGUAGE')).toEqual(models)
+  })
+
   it('filters stale text catalog rows without inventing an available fallback', async () => {
     const client = (await import('@/shared/api/client')).default
     vi.mocked(client.get).mockResolvedValueOnce([

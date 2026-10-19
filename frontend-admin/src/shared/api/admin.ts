@@ -42,6 +42,10 @@ export const adminApi = {
     return api.delete(`/admin/users/${userId}`)
   },
 
+  syncModels(): Promise<AiModel[]> {
+    return api.post('/admin/models/sync')
+  },
+
   listModels(type?: string): Promise<AiModel[]> {
     return api.get('/admin/models', { params: { type: type || undefined } })
   },

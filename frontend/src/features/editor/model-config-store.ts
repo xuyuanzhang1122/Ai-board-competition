@@ -18,7 +18,7 @@ export interface ModelConfigActions {
 export type ModelConfigStore = ModelConfigData & ModelConfigActions
 export type ModelConfigStoreHook = UseBoundStore<StoreApi<ModelConfigStore>>
 
-const STORAGE_KEY = 'competition_model_config_v1'
+const STORAGE_KEY = 'competition_model_config_v2'
 
 // 文本需从当前可用目录主动选择；图片/视频尚未完成接入核验，不能恢复旧偏好。
 export const DEFAULT_MODEL_CONFIG: ModelConfigData = {

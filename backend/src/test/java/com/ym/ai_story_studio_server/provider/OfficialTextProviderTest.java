@@ -107,6 +107,12 @@ class OfficialTextProviderTest {
         RestClient.Builder builder = RestClient.builder();
         server = MockRestServiceServer.bindTo(builder).build();
         modelAccess = mock(TextModelAccess.class);
+        lenient().when(modelAccess.definition(anyString())).thenAnswer(call -> {
+            String code=call.getArgument(0);
+            if(!java.util.Set.of("deepseek-flash","deepseek-v4-pro","mimo-v2.6-pro").contains(code))
+                throw new BusinessException(ResultCode.PARAM_INVALID,"模型不在目录中");
+            return new TextModelRegistry.Definition(code,code,code.startsWith("deepseek")?"DeepSeek":"MiMo");
+        });
         ledger = mock(TextBudgetLedger.class);
         budgetPolicy = mock(TextBudgetPolicy.class);
         lenient().when(budgetPolicy.quote(anyString(), anyInt())).thenAnswer(call -> new TextBudgetPolicy.Quote(
@@ -135,8 +141,38 @@ class OfficialTextProviderTest {
         assertThat(result.inputTokens()).isEqualTo(5);
         assertThat(result.outputTokens()).isEqualTo(3);
         assertThat(result.budgetReservationId()).isNull();
-        verifyNoInteractions(ledger, budgetPolicy);
+        verifyNoInteractions(budgetPolicy);
+        verify(ledger, never()).reserve(any(), any());
         server.verify();
+    }
+
+    @Test
+    void unrestrictedTruncatedReplyRetainsObservedUsageWithoutBlockingOtherCalls() {
+        properties.setUnlimitedText(true);
+        enable(properties.getDeepseek());
+        when(ledger.beginUnrestricted(eq("deepseek-flash"),eq(42L))).thenReturn("unlimited-call");
+        server.expect(requestTo("https://api.deepseek.com/chat/completions"))
+            .andRespond(withSuccess("{\"id\":\"partial-id\",\"model\":\"deepseek-flash\",\"choices\":[{\"message\":{\"content\":\"partial\"},\"finish_reason\":\"length\"}],\"usage\":{\"prompt_tokens\":7,\"completion_tokens\":128,\"total_tokens\":135}}",MediaType.APPLICATION_JSON));
+        assertThatThrownBy(() -> generate("deepseek-flash")).isInstanceOf(BusinessException.class);
+        verify(ledger).completeUnrestricted(eq("unlimited-call"),eq(new TextBudgetLedger.Usage("deepseek-flash","partial-id",7,128,135)),eq(TextBudgetLedger.ReviewReason.INVALID_RESPONSE));
+        verify(ledger,never()).reserve(any(),any());
+        server.verify();
+    }
+
+    @Test
+    void conversationUsesStructuredSavedRolesAndDiscoveredModelId() {
+        enable(properties.getMimo());
+        doReturn(new TextModelRegistry.Definition("new-upstream-id","new-upstream-id","MiMo")).when(modelAccess).definition("new-upstream-id");
+        server.expect(requestTo("https://api.xiaomimimo.com/v1/chat/completions"))
+            .andExpect(jsonPath("$.model").value("new-upstream-id"))
+            .andExpect(jsonPath("$.messages.length()").value(3))
+            .andExpect(jsonPath("$.messages[1].role").value("assistant"))
+            .andExpect(jsonPath("$.messages[2].content").value("继续"))
+            .andRespond(withSuccess(success(",\"usage\":{\"prompt_tokens\":5,\"completion_tokens\":3,\"total_tokens\":8}"),MediaType.APPLICATION_JSON));
+        var result=provider.generateConversation(java.util.List.of(new TextGenerationProvider.ChatTurn("user","开始"),
+            new TextGenerationProvider.ChatTurn("assistant","好的"),new TextGenerationProvider.ChatTurn("user","继续")),
+            "new-upstream-id",128,0.7,0.9);
+        assertThat(result.text()).isNotBlank();server.verify();
     }
 
     @Test

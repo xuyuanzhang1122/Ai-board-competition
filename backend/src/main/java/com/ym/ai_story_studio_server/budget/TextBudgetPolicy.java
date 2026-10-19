@@ -33,7 +33,6 @@ public class TextBudgetPolicy {
                         BigDecimal inputRate, BigDecimal outputRate, BigDecimal ceilingCny) {}
 
     public Quote quote(String model, int maxTokens) {
-        TextModelRegistry.require(model);
         var rate = properties.getQuotes() == null ? null : properties.getQuotes().get(model);
         Instant now = clock.instant();
         if (!properties.isEnabled() || rate == null || !text(rate.getRevision(), 128)

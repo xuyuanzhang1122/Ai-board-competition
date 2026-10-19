@@ -27,15 +27,20 @@ public class AiModel {
     @TableId(type = IdType.AUTO)
     private Long id;
 
+    private String sourceUrl;
+    private String catalogRevision;
+    private String upstreamMetadata;
+    private Integer upstreamPresent;
+
     /**
      * 模型代码（唯一标识）
-     * 如：gemini-3.5-flash、gpt-image-2、sd-api-2-fast-720p
+     * 上游 /models 返回的原始 id
      */
     private String code;
 
     /**
      * 模型显示名称
-     * 如：Gemini 3.5 Flash、GPT Image 2、Seedance 1.5 Pro
+     * 上游名称，缺省时使用原始 id
      */
     private String name;
 
@@ -49,7 +54,7 @@ public class AiModel {
 
     /**
      * 模型提供商
-     * 如：Geeknow、DeepSeek、Agnes
+     * 官方供应商标识
      */
     private String provider;
 

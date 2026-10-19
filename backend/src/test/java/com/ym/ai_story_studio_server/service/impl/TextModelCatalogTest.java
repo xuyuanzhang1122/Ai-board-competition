@@ -17,7 +17,7 @@ class TextModelCatalogTest {
     void unavailableMediaCannotBeAdvertisedOrReenabledEvenWithStaleDatabaseFlags() {
         var mapper = mock(AiModelMapper.class);
         var policy = new TextModelPolicy(mock(TextGenerationProvider.class));
-        var admin = new AdminModelServiceImpl(mapper, policy);
+        var admin = new AdminModelServiceImpl(mapper, mock(com.ym.ai_story_studio_server.provider.OfficialModelCatalog.class), policy);
         for (String type : new String[]{"IMAGE", " video ", "unknown"}) {
             AiModel media = model("unverified-media-model", "official-or-former-supplier", 1);
             media.setType(type);
@@ -25,7 +25,8 @@ class TextModelCatalogTest {
             assertThat(policy.isAvailable(media)).isFalse();
             assertThatThrownBy(() -> admin.toggleEnabled(1L, true))
                     .isInstanceOf(com.ym.ai_story_studio_server.exception.BusinessException.class);
-            admin.toggleEnabled(1L, false);
+            when(mapper.updateCatalogSettings(eq(1L),any(),eq(0),any())).thenReturn(1);
+        admin.toggleEnabled(1L, false);
             assertThat(media.getEnabled()).isZero();
         }
     }
@@ -33,7 +34,7 @@ class TextModelCatalogTest {
     @Test
     void paddedLanguageTypeCannotBypassLegacyGuard() {
         AiModelMapper mapper = mock(AiModelMapper.class);
-        var service = new AdminModelServiceImpl(mapper, new TextModelPolicy(mock(TextGenerationProvider.class)));
+        var service = new AdminModelServiceImpl(mapper, mock(com.ym.ai_story_studio_server.provider.OfficialModelCatalog.class), new TextModelPolicy(mock(TextGenerationProvider.class)));
         var legacyRequest = new ModelUpsertRequest("gemini-3.5-flash", "旧文本", "language ", "Geeknow", null, 0, "");
         assertThatThrownBy(() -> service.createModel(legacyRequest))
                 .isInstanceOf(com.ym.ai_story_studio_server.exception.BusinessException.class);
@@ -54,7 +55,7 @@ class TextModelCatalogTest {
         doThrow(new com.ym.ai_story_studio_server.exception.BusinessException(
                 com.ym.ai_story_studio_server.common.ResultCode.CONFIG_ERROR))
                 .when(provider).validateModelConfiguration("deepseek-flash");
-        var service = new AdminModelServiceImpl(mapper, new TextModelPolicy(provider));
+        var service = new AdminModelServiceImpl(mapper, mock(com.ym.ai_story_studio_server.provider.OfficialModelCatalog.class), new TextModelPolicy(provider));
         assertThatThrownBy(() -> service.toggleEnabled(1L, true))
                 .isInstanceOf(com.ym.ai_story_studio_server.exception.BusinessException.class);
         verify(mapper, never()).updateById(any(AiModel.class));
@@ -70,7 +71,7 @@ class TextModelCatalogTest {
         doThrow(new com.ym.ai_story_studio_server.exception.BusinessException(
                 com.ym.ai_story_studio_server.common.ResultCode.CONFIG_ERROR))
                 .when(provider).validateModelConfiguration("mimo-v2.6-pro");
-        var service = new AiModelServiceImpl(mapper, new TextModelPolicy(provider));
+        var service = new AiModelServiceImpl(mapper, mock(com.ym.ai_story_studio_server.provider.OfficialModelCatalog.class), new TextModelPolicy(provider));
         assertThat(service.getEnabledModelsByType("LANGUAGE")).extracting(v -> v.getCode())
                 .containsExactly("deepseek-flash");
     }
@@ -80,19 +81,20 @@ class TextModelCatalogTest {
         AiModelMapper mapper = mock(AiModelMapper.class);
         AiModel legacy = model("gemini-3.5-flash", "Geeknow", 0);
         when(mapper.selectById(1L)).thenReturn(legacy);
-        var service = new AdminModelServiceImpl(mapper, new TextModelPolicy(mock(TextGenerationProvider.class)));
+        var service = new AdminModelServiceImpl(mapper, mock(com.ym.ai_story_studio_server.provider.OfficialModelCatalog.class), new TextModelPolicy(mock(TextGenerationProvider.class)));
         assertThatThrownBy(() -> service.toggleEnabled(1L, true))
                 .isInstanceOf(com.ym.ai_story_studio_server.exception.BusinessException.class);
         verify(mapper, never()).updateById(any(AiModel.class));
+        when(mapper.updateCatalogSettings(eq(1L),any(),eq(0),any())).thenReturn(1);
         service.toggleEnabled(1L, false);
-        verify(mapper).updateById(legacy);
+        verify(mapper).updateCatalogSettings(eq(1L),any(),eq(0),any());
     }
 
     @Test
     void createAndEditCannotBypassCodeSupplierAndAvailabilityChecks() {
         AiModelMapper mapper = mock(AiModelMapper.class);
         TextGenerationProvider provider = mock(TextGenerationProvider.class);
-        var service = new AdminModelServiceImpl(mapper, new TextModelPolicy(provider));
+        var service = new AdminModelServiceImpl(mapper, mock(com.ym.ai_story_studio_server.provider.OfficialModelCatalog.class), new TextModelPolicy(provider));
         var wrongSupplier = new ModelUpsertRequest("deepseek-flash", "文本", "LANGUAGE", "Geeknow", 1, 0, "");
         assertThatThrownBy(() -> service.createModel(wrongSupplier))
                 .isInstanceOf(com.ym.ai_story_studio_server.exception.BusinessException.class);
@@ -107,6 +109,8 @@ class TextModelCatalogTest {
         AiModel model = new AiModel();
         model.setId(1L);
         model.setCode(code);
+        model.setUpstreamPresent(1);
+        model.setSourceUrl("MiMo".equals(provider)?"https://api.xiaomimimo.com/v1/models":"https://api.deepseek.com/models");
         model.setName(code);
         model.setType("LANGUAGE");
         model.setProvider(provider);
