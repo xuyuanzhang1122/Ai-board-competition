@@ -110,8 +110,8 @@ export function ToolboxPage() {
     try {
       const id = await chatStore.getState().ensureSession(content)
       setParams({ session: String(id) }, { replace: sessionId === null })
-      await chatStore.getState().send(content, model)
-      if (!chatStore.getState().pending && chatStore.getState().activeId === id)
+      const accepted = await chatStore.getState().send(content, model)
+      if (accepted && chatStore.getState().activeId === id)
         setContent((previous) => (previous === sentContent ? '' : previous))
     } catch (error) {
       chatStore.setState({ error: error instanceof Error ? error.message : '创建会话失败，请重试' })
@@ -250,8 +250,8 @@ export function ToolboxPage() {
                 disabled={state.sending}
                 onClick={() => {
                   if (!pendingHere) chooseSession(state.pending!.sessionId)
-                  void state.retry().then(() => {
-                    if (!chatStore.getState().pending) setContent('')
+                  void state.retry().then((accepted) => {
+                    if (accepted) setContent('')
                   })
                 }}
               >

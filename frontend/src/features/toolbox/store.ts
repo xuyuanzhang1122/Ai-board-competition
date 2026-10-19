@@ -25,8 +25,8 @@ interface ChatState {
   pending: PendingSend | null
   refresh: () => Promise<void>
   remove: (id: number) => Promise<void>
-  retry: () => Promise<void>
-  send: (content: string, model: string, type?: MessageType) => Promise<void>
+  retry: () => Promise<boolean>
+  send: (content: string, model: string, type?: MessageType) => Promise<boolean>
   sending: boolean
   sessions: ChatSession[]
 }
@@ -90,7 +90,10 @@ export function createChatStore(
       try {
         const detail = await client.getSession(id)
         if (id === get().activeId && token === revision)
-          set({ messages: detail.messages, error: null })
+          set({
+            messages: detail.messages,
+            error: get().error?.startsWith('更新会话失败') ? null : get().error,
+          })
       } catch (error) {
         if (id === get().activeId && token === revision)
           set({ error: `更新会话失败：${errorText(error)}。服务端任务仍会继续。` })
@@ -116,22 +119,22 @@ export function createChatStore(
     async send(content, model, type = 'TEXT') {
       if (type !== 'TEXT') {
         set({ error: '图片和视频生成暂未开放，当前仅支持文字对话。' })
-        return
+        return false
       }
-      if (!content.trim() || !model || get().sending || get().pending) return
+      if (!content.trim() || !model || get().sending || get().pending) return false
       const id = get().activeId
-      if (id === null) return
+      if (id === null) return false
       const pending: PendingSend = {
         sessionId: id,
         command: { clientRequestId: uuid(), type, model, content: content.trim() },
       }
       savePending(pending)
       set({ pending })
-      await get().retry()
+      return get().retry()
     },
     async retry() {
       const pending = get().pending
-      if (!pending || get().sending) return
+      if (!pending || get().sending) return false
       set({ sending: true, error: null })
       try {
         const accepted = await client.sendMessage(pending.sessionId, pending.command)
@@ -149,11 +152,27 @@ export function createChatStore(
         }
         set({ pending: null, sending: false })
         void get().list()
+        return true
       } catch (error) {
+        const code =
+          error && typeof error === 'object' && 'code' in error ? Number(error.code) : null
+        if (
+          code !== null &&
+          [40000, 40001, 40002, 40003, 40004, 40005, 40006, 50004].includes(code)
+        ) {
+          savePending(null)
+          set({
+            pending: null,
+            sending: false,
+            error: `消息未受理：${errorText(error)}。请调整后重新发送。`,
+          })
+          return false
+        }
         set({
           sending: false,
           error: `发送受理状态未确认：${errorText(error)}。请使用原请求重试，避免重复生成。`,
         })
+        return false
       }
     },
     async cancel(id) {

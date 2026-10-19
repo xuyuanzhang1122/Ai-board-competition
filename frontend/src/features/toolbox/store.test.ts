@@ -150,3 +150,32 @@ describe('session lifecycle guards', () => {
     expect(store.getState().pending?.sessionId).toBe(7)
   })
 })
+
+describe('definitive rejection and uncertain acceptance', () => {
+  it.each([40000, 40001, 40002, 40003, 40004, 40005, 40006, 50004])(
+    'releases a definitively rejected command (%i) for editing and a new send',
+    async (code) => {
+      const { api } = setup()
+      let request = 0
+      const store = createChatStore(api, () => `request-${++request}`)
+      await store.getState().open(7)
+      api.sendMessage.mockRejectedValueOnce(Object.assign(new Error('模型或参数不可用'), { code }))
+      expect(await store.getState().send('keep this draft', 'invalid-model')).toBe(false)
+      expect(store.getState().pending).toBeNull()
+      expect(store.getState().error).toContain('模型或参数不可用')
+      await store.getState().refresh()
+      expect(store.getState().error).toContain('模型或参数不可用')
+      expect(await store.getState().send('corrected draft', 'catalog-model')).toBe(true)
+      expect(api.sendMessage.mock.calls[1]?.[1].clientRequestId).toBe('request-2')
+    },
+  )
+  it('keeps an unknown server failure eligible for the same request retry', async () => {
+    const { api, store } = setup()
+    await store.getState().open(7)
+    api.sendMessage.mockRejectedValueOnce(
+      Object.assign(new Error('unknown server error'), { code: 50000 }),
+    )
+    expect(await store.getState().send('hello', 'catalog-model')).toBe(false)
+    expect(store.getState().pending?.command.clientRequestId).toBe('one-request-id')
+  })
+})
