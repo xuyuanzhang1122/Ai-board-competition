@@ -30,7 +30,7 @@ public class TextBudgetLedger {
                          String blockedReason, long unresolvedCount) {}
     public enum ReviewReason {
         TRANSPORT_ERROR, HTTP_ERROR, INVALID_RESPONSE, UNKNOWN_USAGE,
-        MODEL_MISMATCH, USAGE_OUT_OF_BOUNDS, INCONSISTENT_USAGE, AUDIT_WRITE_FAILED
+        MODEL_MISMATCH, USAGE_OUT_OF_BOUNDS, INCONSISTENT_USAGE, INVALID_USAGE, AUDIT_WRITE_FAILED
     }
 
     public Reservation reserve(TextBudgetPolicy.Quote quote, Long userId) {
@@ -61,7 +61,14 @@ public class TextBudgetLedger {
     }
 
     public void complete(Reservation reservation, Usage usage) {
-        ReviewReason reason = reviewReason(reservation.quote(), usage);
+        saveOutcome(reservation, usage, reviewReason(reservation.quote(), usage));
+    }
+
+    public void recordReview(Reservation reservation, Usage usage, ReviewReason reason) {
+        saveOutcome(reservation, usage, Objects.requireNonNull(reason));
+    }
+
+    private void saveOutcome(Reservation reservation, Usage usage, ReviewReason reason) {
         independent.executeWithoutResult(transaction -> {
             int changed = jdbc.update("""
                 UPDATE generation_budget_reservations
@@ -77,15 +84,7 @@ public class TextBudgetLedger {
     }
 
     public void requireReview(Reservation reservation, ReviewReason reason) {
-        Objects.requireNonNull(reason);
-        independent.executeWithoutResult(transaction -> {
-            int changed = jdbc.update("""
-                UPDATE generation_budget_reservations SET status='REVIEW_REQUIRED', review_reason=?,
-                    finished_at=CURRENT_TIMESTAMP(3)
-                WHERE id=? AND user_id=? AND status='RESERVED'
-                """, reason.name(), reservation.id(), reservation.userId());
-            if (changed == 1) block(reason);
-        });
+        recordReview(reservation, new Usage(null, null, null, null, null), reason);
     }
 
     public Status status() {

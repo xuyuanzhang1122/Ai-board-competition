@@ -4,6 +4,9 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ym.ai_story_studio_server.common.ResultCode;
 import com.ym.ai_story_studio_server.exception.BusinessException;
+import com.ym.ai_story_studio_server.budget.TextBudgetLedger;
+import com.ym.ai_story_studio_server.budget.TextBudgetPolicy;
+import com.ym.ai_story_studio_server.util.UserContext;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.http.HttpHeaders;
@@ -30,21 +33,29 @@ public class OfficialTextProvider implements TextGenerationProvider, DisposableB
             "https://api.xiaomimimo.com/v1", "https://token-plan-cn.xiaomimimo.com/v1");
     private final TextProviderProperties properties;
     private final TextModelAccess modelAccess;
+    private final TextBudgetPolicy budgetPolicy;
+    private final TextBudgetLedger budgetLedger;
     private final RestClient.Builder builder;
     private final HttpComponentsClientHttpRequestFactory ownedFactory;
     private final ObjectMapper mapper = new ObjectMapper();
 
     @Autowired
-    public OfficialTextProvider(TextProviderProperties properties, TextModelAccess modelAccess) {
+    public OfficialTextProvider(TextProviderProperties properties, TextModelAccess modelAccess,
+                                TextBudgetPolicy budgetPolicy, TextBudgetLedger budgetLedger) {
         this.properties = properties;
         this.modelAccess = modelAccess;
+        this.budgetPolicy = budgetPolicy;
+        this.budgetLedger = budgetLedger;
         this.ownedFactory = productionRequestFactory();
         this.builder = RestClient.builder().requestFactory(ownedFactory);
     }
 
-    OfficialTextProvider(TextProviderProperties properties, RestClient.Builder builder, TextModelAccess modelAccess) {
+    OfficialTextProvider(TextProviderProperties properties, RestClient.Builder builder, TextModelAccess modelAccess,
+                         TextBudgetPolicy budgetPolicy, TextBudgetLedger budgetLedger) {
         this.properties = properties;
         this.modelAccess = modelAccess;
+        this.budgetPolicy = budgetPolicy;
+        this.budgetLedger = budgetLedger;
         this.builder = builder;
         this.ownedFactory = null;
     }
@@ -80,6 +91,7 @@ public class OfficialTextProvider implements TextGenerationProvider, DisposableB
         if (deepseek ? !"https://api.deepseek.com".equals(baseUrl) : !MIMO_ENDPOINTS.contains(baseUrl)) {
             throw new BusinessException(ResultCode.CONFIG_ERROR, "文本供应商地址必须使用已支持的官方入口");
         }
+        budgetPolicy.quote(model, 32768);
     }
 
     private String normalizedBaseUrl(TextProviderProperties.Endpoint endpoint) {
@@ -114,6 +126,10 @@ public class OfficialTextProvider implements TextGenerationProvider, DisposableB
         if (deepseek) body.put("thinking", Map.of("type", "disabled"));
         else if (topP != null) body.put("top_p", topP);
 
+        var reservation = budgetLedger.reserve(budgetPolicy.quote(model, maxTokens), UserContext.getUserId());
+        TextGenerationResult result;
+        TextBudgetLedger.Usage observed = null;
+        boolean invalidUsage = false;
         try {
             String raw = builder.clone().baseUrl(normalizedBaseUrl(endpoint)).build().post()
                     .uri("/chat/completions").header(HttpHeaders.AUTHORIZATION, "Bearer " + endpoint.getApiKey())
@@ -123,32 +139,64 @@ public class OfficialTextProvider implements TextGenerationProvider, DisposableB
                                 "文本供应商请求失败（HTTP " + response.getStatusCode().value() + "）");
                     }).body(String.class);
             JsonNode root = mapper.readTree(raw == null ? "" : raw);
+            // Extract available audit fields before rejecting empty/truncated generation content.
+            JsonNode usage = root == null ? mapper.missingNode() : root.path("usage");
+            JsonNode total = usage.path("total_tokens");
+            Integer input = tokenCount(usage.path("prompt_tokens"));
+            Integer output = tokenCount(usage.path("completion_tokens"));
+            Integer tokens = tokenCount(total);
+            invalidUsage = !usage.isMissingNode() && !usage.isNull() && !usage.isObject()
+                    || invalidTokenField(usage.path("prompt_tokens")) || invalidTokenField(usage.path("completion_tokens"))
+                    || invalidTokenField(total);
+            if ((total.isMissingNode() || total.isNull()) && input != null && output != null
+                    && (long) input + output <= Integer.MAX_VALUE) tokens = input + output;
+            observed = new TextBudgetLedger.Usage(root == null ? null : root.path("model").asText(null),
+                    root == null ? null : root.path("id").asText(null), input, output, tokens);
             JsonNode choice = root == null ? null : root.path("choices").path(0);
             if (choice == null || !choice.path("message").path("content").isTextual()
                     || choice.path("message").path("content").asText().isBlank()
                     || !"stop".equals(choice.path("finish_reason").asText())) {
                 throw new BusinessException(ResultCode.AI_SERVICE_ERROR, "文本供应商未返回完整有效结果");
             }
-            JsonNode usage = root.path("usage");
-            Integer tokens = tokenCount(usage.path("total_tokens"));
-            if (tokens == null) {
-                Integer input = tokenCount(usage.path("prompt_tokens"));
-                Integer output = tokenCount(usage.path("completion_tokens"));
-                if (input != null && output != null && (long) input + output <= Integer.MAX_VALUE) tokens = input + output;
-            }
-            return new TextGenerationResult(choice.path("message").path("content").asText(),
-                    root.path("model").asText(null), supplier, root.path("id").asText(null), tokens);
+            result = new TextGenerationResult(choice.path("message").path("content").asText(),
+                    root.path("model").asText(null), supplier, root.path("id").asText(null), tokens,
+                    input, output, reservation.id());
         } catch (BusinessException e) {
+            markReview(reservation, TextBudgetLedger.ReviewReason.INVALID_RESPONSE, observed);
             throw e;
         } catch (RestClientException e) {
             // Transport may fail after acceptance: do not submit again or expose request/error bodies.
+            markReview(reservation, TextBudgetLedger.ReviewReason.TRANSPORT_ERROR, observed);
             throw new BusinessException(ResultCode.AI_SERVICE_ERROR, "文本请求未完成，请核对任务后再尝试");
         } catch (Exception e) {
+            markReview(reservation, TextBudgetLedger.ReviewReason.INVALID_RESPONSE, observed);
             throw new BusinessException(ResultCode.AI_SERVICE_ERROR, "文本供应商响应无法解析");
+        }
+        try {
+            if (invalidUsage) budgetLedger.recordReview(reservation, observed, TextBudgetLedger.ReviewReason.INVALID_USAGE);
+            else budgetLedger.complete(reservation, observed);
+        } catch (RuntimeException auditFailure) {
+            markReview(reservation, TextBudgetLedger.ReviewReason.AUDIT_WRITE_FAILED, observed);
+            throw new BusinessException(ResultCode.SYSTEM_ERROR, "文本调用已返回但预算审计保存失败，请核对预留记录");
+        }
+        return result;
+    }
+
+    private void markReview(TextBudgetLedger.Reservation reservation, TextBudgetLedger.ReviewReason reason,
+                            TextBudgetLedger.Usage observed) {
+        try {
+            if (observed == null) budgetLedger.requireReview(reservation, reason);
+            else budgetLedger.recordReview(reservation, observed, reason);
+        } catch (RuntimeException auditFailure) {
+            throw new BusinessException(ResultCode.SYSTEM_ERROR, "预算审计保存失败，已预留额度请核对");
         }
     }
 
     private Integer tokenCount(JsonNode value) {
         return value.isIntegralNumber() && value.canConvertToInt() && value.intValue() >= 0 ? value.intValue() : null;
+    }
+
+    private boolean invalidTokenField(JsonNode node) {
+        return !node.isMissingNode() && !node.isNull() && tokenCount(node) == null;
     }
 }

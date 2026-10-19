@@ -37,7 +37,7 @@ class AiTextServiceProviderTest {
         when(jobs.claimPendingTextJob(12L, 1L, 7L)).thenReturn(1);
         when(charging.charge(any())).thenReturn(ChargingService.ChargingResult.builder().totalCost(1).build());
         when(provider.generateText(any(), any(), any(), any(), any()))
-                .thenReturn(new TextGenerationResult("草稿", "revision", "DEEPSEEK", "req-1", 10));
+                .thenReturn(new TextGenerationResult("草稿", "revision", "DEEPSEEK", "req-1", 10, 6, 4, "budget-1"));
         settings.getText().setModel("mimo-v2.6-pro");
         settings.getText().setMaxTokens(999);
         settings.getText().setTemperature(0.9);
@@ -47,6 +47,10 @@ class AiTextServiceProviderTest {
         verify(jobs).finishClaimedTextJob(queued);
         assertThat(queued.getStatus()).isEqualTo("SUCCEEDED");
         assertThat(queued.getJobType()).isEqualTo("PARSE_TEXT");
+        var metadata = new ObjectMapper().readTree(queued.getMetaJson());
+        assertThat(metadata.path("budgetReservationId").asText()).isEqualTo("budget-1");
+        assertThat(metadata.path("inputTokens").asInt()).isEqualTo(6);
+        assertThat(metadata.path("outputTokens").asInt()).isEqualTo(4);
     }
 
     @Test
@@ -129,7 +133,9 @@ class AiTextServiceProviderTest {
         AiProperties settings = new AiProperties();
         settings.getText().setMaxTokens(0);
         AiTextService service = new AiTextService(new OfficialTextProvider(properties,
-                mock(com.ym.ai_story_studio_server.provider.TextModelAccess.class)), charging, jobs, settings, new ObjectMapper());
+                mock(com.ym.ai_story_studio_server.provider.TextModelAccess.class),
+                mock(com.ym.ai_story_studio_server.budget.TextBudgetPolicy.class),
+                mock(com.ym.ai_story_studio_server.budget.TextBudgetLedger.class)), charging, jobs, settings, new ObjectMapper());
         TextGenerateRequest request = new TextGenerateRequest("八仙过海", null, null, 1L);
         assertThatThrownBy(() -> service.generateText(request)).isInstanceOf(BusinessException.class);
         verifyNoInteractions(charging, jobs);

@@ -377,6 +377,9 @@ public class AiTextService {
             metaData.put("provider", result.provider());
             metaData.put("upstreamModel", result.model());
             metaData.put("providerRequestId", result.requestId());
+            metaData.put("inputTokens", result.inputTokens());
+            metaData.put("outputTokens", result.outputTokens());
+            metaData.put("budgetReservationId", result.budgetReservationId());
             job.setMetaJson(objectMapper.writeValueAsString(metaData));
         } catch (Exception e) {
             throw new BusinessException(ResultCode.SYSTEM_ERROR, "文本任务结果保存失败");

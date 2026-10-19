@@ -43,6 +43,25 @@ class TextBudgetPolicyTest {
     }
 
     @Test
+    void bindsModelCodesWithHyphensAndUtcVerificationTimeInTheNewNamespace() {
+        String base = "competition.text-budget.quotes.deepseek-flash.";
+        var values = new java.util.HashMap<String, Object>();
+        values.put("competition.text-budget.enabled", "true");
+        values.put(base + "revision", "synthetic-binding-v1");
+        values.put(base + "verified-at", NOW.toString());
+        values.put(base + "reference", "Synthetic binding test");
+        values.put(base + "response-model", "deepseek-flash");
+        values.put(base + "max-billed-input-tokens", "1000");
+        values.put(base + "input-cny-per-million", "2");
+        values.put(base + "output-cny-per-million", "4");
+        var source = new org.springframework.boot.context.properties.source.MapConfigurationPropertySource(values);
+        var props = new org.springframework.boot.context.properties.bind.Binder(source).bind("competition.text-budget",
+                org.springframework.boot.context.properties.bind.Bindable.of(TextBudgetProperties.class)).get();
+        assertThat(props.getQuotes()).containsKey("deepseek-flash");
+        assertThat(policy(props).quote("deepseek-flash", 128).ceilingCny()).isEqualByComparingTo("0.002512");
+    }
+
+    @Test
     void pricesFullInputBoundPlusOutputLimitAndRoundsUpNotDown() {
         var props = configured();
         var quote = policy(props).quote("deepseek-flash", 128);

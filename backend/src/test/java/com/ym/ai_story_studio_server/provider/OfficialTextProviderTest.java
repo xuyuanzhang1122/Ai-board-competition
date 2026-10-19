@@ -12,6 +12,9 @@ import org.springframework.web.client.RestClient;
 
 import java.io.IOException;
 import java.util.Map;
+import com.ym.ai_story_studio_server.budget.TextBudgetLedger;
+import com.ym.ai_story_studio_server.budget.TextBudgetPolicy;
+import com.ym.ai_story_studio_server.util.UserContext;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -24,6 +27,8 @@ class OfficialTextProviderTest {
     private MockRestServiceServer server;
     private OfficialTextProvider provider;
     private TextModelAccess modelAccess;
+    private TextBudgetLedger ledger;
+    private TextBudgetPolicy budgetPolicy;
 
     @Test
     void productionTransportSupportsExplicitRetryDisabling() throws Exception {
@@ -102,7 +107,55 @@ class OfficialTextProviderTest {
         RestClient.Builder builder = RestClient.builder();
         server = MockRestServiceServer.bindTo(builder).build();
         modelAccess = mock(TextModelAccess.class);
-        provider = new OfficialTextProvider(properties, builder, modelAccess);
+        ledger = mock(TextBudgetLedger.class);
+        budgetPolicy = mock(TextBudgetPolicy.class);
+        when(budgetPolicy.quote(anyString(), anyInt())).thenAnswer(call -> new TextBudgetPolicy.Quote(
+                call.getArgument(0), "synthetic", java.time.Instant.parse("2026-10-19T00:00:00Z"), "offline fixture",
+                "actual-revision", 1000, call.getArgument(1), java.math.BigDecimal.ONE,
+                java.math.BigDecimal.ONE, new java.math.BigDecimal("0.01")));
+        when(ledger.reserve(any(), any())).thenAnswer(call -> new TextBudgetLedger.Reservation(
+                "reservation-1", 42L, call.getArgument(0)));
+        provider = new OfficialTextProvider(properties, builder, modelAccess, budgetPolicy, ledger);
+        UserContext.setUserId(42L);
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void clearUser() { UserContext.clear(); }
+
+    @Test
+    void reservesBeforeHttpAndReturnsDurableCorrelationWithActualUsage() {
+        enable(properties.getDeepseek());
+        server.expect(requestTo("https://api.deepseek.com/chat/completions"))
+                .andExpect(request -> verify(ledger).reserve(any(), eq(42L)))
+                .andRespond(withSuccess(success(",\"usage\":{\"prompt_tokens\":5,\"completion_tokens\":3,\"total_tokens\":8}"), MediaType.APPLICATION_JSON));
+        var result = generate("deepseek-flash");
+        assertThat(result.budgetReservationId()).isEqualTo("reservation-1");
+        assertThat(result.inputTokens()).isEqualTo(5);
+        assertThat(result.outputTokens()).isEqualTo(3);
+        verify(ledger).complete(any(), eq(new TextBudgetLedger.Usage("actual-revision", "req-1", 5, 3, 8)));
+        server.verify();
+    }
+
+    @Test
+    void budgetRejectionDoesNotSendOrTryAnotherModel() {
+        enable(properties.getDeepseek());
+        doThrow(new BusinessException(ResultCode.CONFIG_ERROR, "budget exhausted")).when(ledger).reserve(any(), any());
+        assertThatThrownBy(() -> generate("deepseek-flash")).isInstanceOf(BusinessException.class);
+        verify(ledger, never()).complete(any(), any());
+        server.verify();
+    }
+
+    @Test
+    void missingVerifiedPriceCannotBeBypassedBySupplierEnabledFlag() {
+        enable(properties.getDeepseek());
+        var builder = RestClient.builder();
+        var isolated = MockRestServiceServer.bindTo(builder).build();
+        var unconfigured = new OfficialTextProvider(properties, builder, modelAccess,
+                new TextBudgetPolicy(new com.ym.ai_story_studio_server.budget.TextBudgetProperties()), ledger);
+        assertThatThrownBy(() -> unconfigured.generateText("八仙过海", "deepseek-flash", 128, 0.7, 0.9))
+                .isInstanceOf(BusinessException.class).hasMessageContaining("已核验价格");
+        verifyNoInteractions(ledger);
+        isolated.verify();
     }
 
     private void enable(TextProviderProperties.Endpoint endpoint) {
@@ -196,6 +249,7 @@ class OfficialTextProviderTest {
                 .andRespond(withException(new IOException("secret-transport-detail")));
         assertThatThrownBy(() -> generate("deepseek-flash")).isInstanceOf(BusinessException.class)
                 .hasMessageNotContaining("secret-transport-detail").hasNoCause();
+        verify(ledger).requireReview(any(), eq(TextBudgetLedger.ReviewReason.TRANSPORT_ERROR));
         server.verify();
     }
 
