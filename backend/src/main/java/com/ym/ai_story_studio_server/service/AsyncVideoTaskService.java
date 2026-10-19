@@ -145,6 +145,10 @@ public class AsyncVideoTaskService {
                         continue;
                     }
                     
+                    VideoCompletionContext context = shotId == null ? null :
+                            new VideoCompletionContext(job.getProjectId(), shotId, parentJobId, prompt);
+                    if (!requirePollingCapability(job.getId(), model, context)) continue;
+
                     log.info("恢复视频生成任务轮询 - jobId: {}, apiTaskId: {}", job.getId(), apiTaskId);
                     
                     // 启动异步轮询
@@ -225,6 +229,8 @@ public class AsyncVideoTaskService {
         log.info("jobId: {}, apiTaskId: {}, userId: {}", jobId, apiTaskId, userId);
         log.info("线程: {}", Thread.currentThread().getName());
         log.info("=====================================");
+
+        if (!requirePollingCapability(jobId, model, completionContext)) return;
 
         AiProperties.Video videoConfig = aiProperties.getVideo();
         Long pollInterval = videoConfig.getPollInterval();
@@ -565,6 +571,17 @@ public class AsyncVideoTaskService {
      * @param jobId 任务ID
      * @param errorMessage 错误信息
      */
+    private boolean requirePollingCapability(Long jobId, String model, VideoCompletionContext context) {
+        try {
+            videoProvider.validateVideoModel(model);
+            return true;
+        } catch (BusinessException unavailable) {
+            handleVideoGenerationFailure(jobId,
+                    "媒体能力不可用，结果及费用待人工核对：" + unavailable.getMessage(), context);
+            return false;
+        }
+    }
+
     private void handleVideoGenerationFailure(
             Long jobId,
             String errorMessage,
@@ -574,6 +591,7 @@ public class AsyncVideoTaskService {
         log.error("jobId: {}, 错误: {}", jobId, errorMessage);
 
         Job job = jobMapper.selectById(jobId);
+        if (job != null && isTerminal(job.getStatus())) return;
         if (job != null) {
             job.setStatus("FAILED");
             job.setErrorMessage(errorMessage);

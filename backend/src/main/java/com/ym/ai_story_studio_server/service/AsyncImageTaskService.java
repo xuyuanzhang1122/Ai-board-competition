@@ -124,16 +124,11 @@ public class AsyncImageTaskService {
                     for (String apiTaskId : apiTaskIds) {
                         log.info("恢复图片生成任务轮询 - jobId: {}, shotId: {}, apiTaskId: {}",
                                 job.getId(), item.getTargetId(), apiTaskId);
-                        selfProvider.getObject().pollImageGenerationTask(apiTaskId, new ImageTaskContext(
-                                job.getId(),
-                                job.getProjectId(),
-                                item.getTargetId(),
-                                prompt,
-                                model != null ? model : aiProperties.getImage().getDefaultModel(),
-                                aspectRatio != null ? aspectRatio : aiProperties.getImage().getDefaultAspectRatio(),
-                                job.getUserId(),
-                                index++
-                        ));
+                        ImageTaskContext context = new ImageTaskContext(
+                                job.getId(), job.getProjectId(), item.getTargetId(), prompt, model,
+                                aspectRatio, job.getUserId(), index++);
+                        if (!requirePollingCapability(context)) break;
+                        selfProvider.getObject().pollImageGenerationTask(apiTaskId, context);
                         recovered++;
                     }
                 }
@@ -155,6 +150,8 @@ public class AsyncImageTaskService {
     public void pollImageGenerationTask(String apiTaskId, ImageTaskContext ctx) {
         log.info("图片异步轮询启动 - jobId: {}, shotId: {}, apiTaskId: {}, 线程: {}",
                 ctx.parentJobId(), ctx.shotId(), apiTaskId, Thread.currentThread().getName());
+
+        if (!requirePollingCapability(ctx)) return;
 
         AiProperties.Image imageConfig = aiProperties.getImage();
         long pollInterval = imageConfig.getPollInterval();
@@ -484,6 +481,17 @@ public class AsyncImageTaskService {
             UserContext.clear();
         }
         return ossUrl;
+    }
+
+    private boolean requirePollingCapability(ImageTaskContext context) {
+        try {
+            imageProvider.validateImageConfiguration(context.model(), context.aspectRatio());
+            return true;
+        } catch (BusinessException unavailable) {
+            handleImageTaskFailure(context,
+                    "媒体能力不可用，结果及费用待人工核对：" + unavailable.getMessage());
+            return false;
+        }
     }
 
     private void handleImageTaskFailure(ImageTaskContext ctx, String errorMessage) {
