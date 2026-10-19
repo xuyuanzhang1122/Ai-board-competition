@@ -24,9 +24,11 @@ import type { ModelVO } from '@/shared/types/api'
 import type { MessageType } from './api'
 import { ChatComposer } from './components/ChatComposer'
 import { ConversationMessage } from './components/ChatMessage'
+import { applyToolboxTitle } from './page-title'
 import { chatStore, isActiveTask } from './store'
 
 export function ToolboxPage() {
+  useEffect(() => applyToolboxTitle(document), [])
   const state = useStore(chatStore)
   const [params, setParams] = useSearchParams()
   const navigate = useNavigate()

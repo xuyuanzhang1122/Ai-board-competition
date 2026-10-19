@@ -460,31 +460,113 @@
     animation: none;
   }
 }
-.toolbox-media-task {
-  width: min(100%, 400px);
-  min-height: 180px;
+.toolbox-media-card {
+  width: min(100%, 512px);
+  padding: 0;
+  color: #777;
+}
+.toolbox-media-card h3 {
+  margin: 0 0 18px 4px;
+  font-size: 17px;
+  line-height: 1.6;
+  font-weight: 400;
+  color: #777;
+}
+.toolbox-media-canvas {
+  width: 100%;
+  aspect-ratio: 1;
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-direction: column;
-  gap: 14px;
-  border-radius: 20px;
-  background: #f7f9fc;
-  color: #7d8a9b;
-  padding: 22px;
+  background: #fff;
+  border: 1px solid #f4f7fe;
+  border-radius: 18px;
 }
-.toolbox-media-task img,
-.toolbox-media-task video {
+.toolbox-media-loading-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
-  height: auto;
-  border-radius: 12px;
+  height: 100%;
+  color: #79a8f8;
 }
-.toolbox-media-task a {
+.toolbox-media-progress {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  border: 1px solid #ededed;
+  box-shadow: 0 2px 8px #0000000a;
+  border-radius: 20px;
+  color: #777;
+  font-size: 13px;
+  padding: 2px 12px;
+  background: #fff;
+}
+.toolbox-media-task-actions {
+  display: flex;
+  margin-top: 12px;
+}
+.toolbox-media-task-actions button {
   display: flex;
   align-items: center;
   gap: 7px;
-  color: #557aac;
-  font-size: 13px;
+  padding: 5px 10px;
+  color: #888;
+  border: 1px solid #eee;
+  background: #fff;
+  border-radius: 9px;
+  font-size: 12px;
+}
+.toolbox-media-result {
+  width: 100%;
+}
+.toolbox-media-result img,
+.toolbox-media-result video {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 16px;
+}
+.toolbox-media-result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin-top: 13px;
+}
+.toolbox-media-result-actions a {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  text-decoration: none;
+  color: #999;
+  font-size: 12px;
+}
+.toolbox-media-result-actions a:hover {
+  color: #333;
+}
+.toolbox-media-terminal {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 22px 4px;
+  color: #999;
+  font-size: 14px;
+  line-height: 1.8;
+}
+.toolbox-media-terminal > svg {
+  flex: none;
+  margin-top: 4px;
+}
+.toolbox-media-terminal p {
+  margin: 0 0 8px;
+}
+.toolbox-media-terminal span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #aaa;
+  font-size: 12px;
 }
 .toolbox-message-error {
   color: #af5353;

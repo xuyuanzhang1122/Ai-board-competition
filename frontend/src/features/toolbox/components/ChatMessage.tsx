@@ -1,9 +1,10 @@
 import { Markdown } from '@lobehub/ui'
-import { Check, Copy, Download, ImageIcon, LoaderCircle, Square, Video } from 'lucide-react'
+import { Check, Copy, LoaderCircle, Square } from 'lucide-react'
 import { useState } from 'react'
 
 import type { ChatMessage } from '../api'
 import { isActiveTask } from '../store'
+import { MediaTaskCard } from './MediaTaskCard'
 
 export function ConversationMessage({
   message,
@@ -21,7 +22,12 @@ export function ConversationMessage({
       </div>
     )
   const active = isActiveTask(message)
-  const media = message.type !== 'TEXT'
+  if (message.type !== 'TEXT')
+    return (
+      <article aria-label="助手回复" className="toolbox-assistant">
+        <MediaTaskCard message={message} onCancel={onCancel} />
+      </article>
+    )
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(message.content)
@@ -34,33 +40,7 @@ export function ConversationMessage({
   }
   return (
     <article aria-label="助手回复" className="toolbox-assistant">
-      {media ? (
-        <div className="toolbox-media-task">
-          {message.type === 'IMAGE' ? <ImageIcon size={22} /> : <Video size={22} />}
-          <span>
-            {active
-              ? message.status === 'PENDING'
-                ? '任务已排队'
-                : `正在生成${message.type === 'IMAGE' ? '图片' : '视频'}`
-              : message.status === 'SUCCEEDED'
-                ? '生成完成'
-                : '媒体任务'}
-          </span>
-          {message.resultUrl &&
-            message.status === 'SUCCEEDED' &&
-            (message.type === 'IMAGE' ? (
-              <img alt="生成结果" src={message.resultUrl} />
-            ) : (
-              <video controls src={message.resultUrl} />
-            ))}
-          {message.resultUrl && (
-            <a href={message.resultUrl} rel="noreferrer" target="_blank">
-              <Download size={16} />
-              查看原始结果
-            </a>
-          )}
-        </div>
-      ) : message.content ? (
+      {message.content ? (
         <div className="toolbox-markdown">
           <Markdown>{message.content}</Markdown>
         </div>
