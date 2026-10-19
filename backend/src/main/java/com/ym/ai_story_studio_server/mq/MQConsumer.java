@@ -1,10 +1,12 @@
 package com.ym.ai_story_studio_server.mq;
 
+import com.ym.ai_story_studio_server.provider.ImageGenerationProvider;
+import com.ym.ai_story_studio_server.provider.ImageGenerationResult;
+import com.ym.ai_story_studio_server.provider.ImageTaskResult;
+import com.ym.ai_story_studio_server.provider.VideoGenerationProvider;
+import com.ym.ai_story_studio_server.provider.VideoTaskResult;
 import com.rabbitmq.client.Channel;
-import com.ym.ai_story_studio_server.client.GeeknowClient;
-import com.ym.ai_story_studio_server.client.GeeknowClient.ImageApiResponse;
-import com.ym.ai_story_studio_server.client.ImageGenerationRouter;
-import com.ym.ai_story_studio_server.client.SudashuiVideoClient;
+
 import com.ym.ai_story_studio_server.config.AiProperties;
 import com.ym.ai_story_studio_server.dto.ai.VideoGenerateRequest;
 import com.ym.ai_story_studio_server.entity.Job;
@@ -77,9 +79,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 public class MQConsumer {
 
-    private final GeeknowClient geeknowClient;
-    private final ImageGenerationRouter imageGenerationRouter;
-    private final SudashuiVideoClient sudashuiVideoClient;
+    private final ImageGenerationProvider imageProvider;
+    private final VideoGenerationProvider videoProvider;
     private final StorageService storageService;
     private final AssetCreationService assetCreationService;
     private final ChargingService chargingService;
@@ -387,7 +388,7 @@ public class MQConsumer {
 
         // 应用配置
         String finalModel = msg.model() != null ? msg.model() : aiProperties.getImage().getDefaultModel();
-        String finalAspectRatio = imageGenerationRouter.validateImageConfiguration(
+        String finalAspectRatio = imageProvider.validateImageConfiguration(
                 finalModel,
                 msg.aspectRatio() != null ? msg.aspectRatio() : aiProperties.getImage().getDefaultAspectRatio());
         List<String> referenceImageUrls = prepareReferenceImagesForUpstream(jobId, msg.referenceImageUrls());
@@ -420,7 +421,7 @@ public class MQConsumer {
                     new AsyncImageTaskService.ImageTaskContext(
                             jobId, projectId, shotId, prompt, finalModel, finalAspectRatio, userId, 0);
 
-            if (allHttpUrls(referenceImageUrls) && imageGenerationRouter.supportsAsyncImageTask(finalModel)) {
+            if (allHttpUrls(referenceImageUrls) && imageProvider.supportsAsyncImageTask(finalModel)) {
                 ImageGenerationTaskService.SubmissionClaim claim = imageGenerationTaskService.claimSubmission(
                         jobId, shotId, 0, userId, projectId, prompt, finalModel, finalAspectRatio);
                 var persistedTask = claim.task();
@@ -435,9 +436,9 @@ public class MQConsumer {
                 }
 
                 // 4. 提交GeekNow异步图片任务，拿到taskId后立即释放消费线程
-                GeeknowClient.ImageTaskApiResponse submitResponse;
+                ImageTaskResult submitResponse;
                 try {
-                    submitResponse = geeknowClient.submitImageTask(
+                    submitResponse = imageProvider.submitImageTask(
                             prompt,
                             finalModel,
                             finalAspectRatio,
@@ -489,7 +490,7 @@ public class MQConsumer {
         }
 
         String finalModel = msg.getModel() != null ? msg.getModel() : aiProperties.getImage().getDefaultModel();
-        String finalAspectRatio = imageGenerationRouter.validateImageConfiguration(
+        String finalAspectRatio = imageProvider.validateImageConfiguration(
                 finalModel,
                 msg.getAspectRatio() != null ? msg.getAspectRatio() : aiProperties.getImage().getDefaultAspectRatio());
 
@@ -538,7 +539,7 @@ public class MQConsumer {
                         jobId, getBoundCharacterImages(shotId));
                 log.info("分镜绑定的角色图片数量 - shotId: {}, count: {}", shotId, referenceImageUrls.size());
 
-                if (allHttpUrls(referenceImageUrls) && imageGenerationRouter.supportsAsyncImageTask(finalModel)) {
+                if (allHttpUrls(referenceImageUrls) && imageProvider.supportsAsyncImageTask(finalModel)) {
                     // 每个序号都先持久化提交意图；重投时已有providerTaskId的序号只补发轮询消息。
                     for (int j = 0; j < countPerItem; j++) {
                         ImageGenerationTaskService.SubmissionClaim claim = imageGenerationTaskService.claimSubmission(
@@ -555,9 +556,9 @@ public class MQConsumer {
                                     jobId, shotId, j);
                             continue;
                         }
-                        GeeknowClient.ImageTaskApiResponse submitResponse;
+                        ImageTaskResult submitResponse;
                         try {
-                            submitResponse = geeknowClient.submitImageTask(
+                            submitResponse = imageProvider.submitImageTask(
                                     prompt,
                                     finalModel,
                                     finalAspectRatio,
@@ -643,7 +644,7 @@ public class MQConsumer {
                 aiProperties.getVideo().getDefaultAspectRatio();
         String finalModel = msg.getModel() != null ? msg.getModel() :
                 aiProperties.getVideo().getModel();
-        Integer finalDuration = sudashuiVideoClient.resolveVideoDuration(
+        Integer finalDuration = videoProvider.resolveVideoDuration(
                 finalModel,
                 msg.getDuration() != null ? msg.getDuration() : aiProperties.getVideo().getDefaultDuration()
         );
@@ -686,7 +687,7 @@ public class MQConsumer {
 
                 // 当前四个 Seedance 模型保留完整多参考列表；兼容未来单参考模型时再合并。
                 if (referenceImageUrls.size() > 1
-                        && !SudashuiVideoClient.supportsMultipleReferenceImages(finalModel)) {
+                        && !videoProvider.supportsMultipleReferenceImages(finalModel)) {
                     referenceImageUrls = List.of(mergeReferenceImagesToSingleUrl(referenceImageUrls));
                     // 多图已拼成一张，"图N"编号不再成立
                     usagePrompt = "";
@@ -753,7 +754,7 @@ public class MQConsumer {
         String finalAspectRatio = aspectRatio != null ? aspectRatio :
                 aiProperties.getVideo().getDefaultAspectRatio();
         String finalModel = model != null ? model : aiProperties.getVideo().getModel();
-        Integer finalDuration = sudashuiVideoClient.resolveVideoDuration(
+        Integer finalDuration = videoProvider.resolveVideoDuration(
                 finalModel,
                 duration != null ? duration : aiProperties.getVideo().getDefaultDuration()
         );
@@ -795,7 +796,7 @@ public class MQConsumer {
 
             // 当前四个 Seedance 模型保留完整多参考列表；兼容未来单参考模型时再合并。
             if (referenceImageUrls.size() > 1
-                    && !SudashuiVideoClient.supportsMultipleReferenceImages(finalModel)) {
+                    && !videoProvider.supportsMultipleReferenceImages(finalModel)) {
                 referenceImageUrls = List.of(mergeReferenceImagesToSingleUrl(referenceImageUrls));
                 // 多图已拼成一张，"图N"编号不再成立
                 usagePrompt = "";
@@ -812,7 +813,7 @@ public class MQConsumer {
 
             UserContext.setUserId(userId);
             try {
-                SudashuiVideoClient.VideoTaskResponse apiResponse = sudashuiVideoClient.createVideo(
+                VideoTaskResult apiResponse = videoProvider.createVideo(
                         finalPrompt,
                         finalModel,
                         finalAspectRatio,
@@ -1072,7 +1073,7 @@ public class MQConsumer {
     /**
      * 按项目 styleCode(3DGC/REALISTIC) 在 prompt 前追加对应风格的固定提示词。
      *
-     * <p>仅用于绕开 {@link AiVideoService#generateVideo} 直接调用 {@link SudashuiVideoClient} 的
+     * <p>仅用于绕开 {@link AiVideoService#generateVideo} 直接调用 {@link VideoGenerationProvider} 的
      * 单分镜视频旧链路({@link #executeSingleShotVideoGeneration});批量链路的风格前缀已经在
      * {@code AiVideoService.generateVideo} 内统一应用，不要在 {@link #executeBatchVideoGeneration}
      * 里重复调用，否则会叠加两次。
@@ -1226,7 +1227,7 @@ public class MQConsumer {
                 // 5. 调用 GeekNow 生成图片
                 UserContext.setUserId(userId);
                 try {
-                    ImageApiResponse response = imageGenerationRouter.generateImage(
+                    ImageGenerationResult response = imageProvider.generateImage(
                             prompt,
                             finalModel,
                             finalAspectRatio,
@@ -1239,7 +1240,7 @@ public class MQConsumer {
                     }
 
                     // 获取所有返回的图片数据（即梦模型返回4张图片）
-                    List<ImageApiResponse.ImageData> allResults = response.data();
+                    List<ImageGenerationResult.ImageData> allResults = response.data();
                     log.info("AI返回 {} 张图片 - projectCharacterId: {}", allResults.size(), projectCharacterId);
 
                     // 7. 处理所有图片并上传到OSS
@@ -1386,7 +1387,7 @@ public class MQConsumer {
                 // 6. 调用 GeekNow 生成图片
                 UserContext.setUserId(userId);
                 try {
-                    ImageApiResponse response = imageGenerationRouter.generateImage(
+                    ImageGenerationResult response = imageProvider.generateImage(
                             prompt,
                             finalModel,
                             finalAspectRatio,
@@ -1399,7 +1400,7 @@ public class MQConsumer {
                     }
 
                     // 获取图片URL或base64
-                    ImageApiResponse.ImageData firstResult = response.data().get(0);
+                    ImageGenerationResult.ImageData firstResult = response.data().get(0);
                     String imageData = firstResult.url();
 
                     if (imageData == null) {
@@ -1527,7 +1528,7 @@ public class MQConsumer {
                 // 5. 调用 GeekNow 生成图片
                 UserContext.setUserId(userId);
                 try {
-                    ImageApiResponse response = imageGenerationRouter.generateImage(
+                    ImageGenerationResult response = imageProvider.generateImage(
                             prompt,
                             finalModel,
                             finalAspectRatio,
@@ -1540,7 +1541,7 @@ public class MQConsumer {
                     }
 
                     // 获取所有返回的图片数据（即梦模型返回4张图片）
-                    List<ImageApiResponse.ImageData> allResults = response.data();
+                    List<ImageGenerationResult.ImageData> allResults = response.data();
                     log.info("AI返回 {} 张图片 - projectPropId: {}", allResults.size(), projectPropId);
 
                     // 7. 处理所有图片并上传到OSS
@@ -1788,7 +1789,7 @@ public class MQConsumer {
             try (InputStream inputStream = storageService.download(imageUrl)) {
                 byte[] imageBytes = inputStream.readAllBytes();
                 String contentType = inferReferenceImageContentType(imageUrl);
-                String publicUrl = geeknowClient.uploadImageForPublicUrl(
+                String publicUrl = imageProvider.uploadReferenceImage(
                         imageBytes, referenceFileName(imageUrl), contentType);
                 if (publicUrl == null || publicUrl.isBlank()) {
                     throw new IllegalStateException("GeekNow参考图上传未返回public_url");

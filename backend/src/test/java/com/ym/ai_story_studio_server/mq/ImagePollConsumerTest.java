@@ -1,7 +1,10 @@
 package com.ym.ai_story_studio_server.mq;
 
+import com.ym.ai_story_studio_server.provider.ImageGenerationProvider;
+import com.ym.ai_story_studio_server.provider.ImageGenerationResult;
+import com.ym.ai_story_studio_server.provider.ImageTaskResult;
 import com.rabbitmq.client.Channel;
-import com.ym.ai_story_studio_server.client.GeeknowClient;
+
 import com.ym.ai_story_studio_server.config.AiProperties;
 import com.ym.ai_story_studio_server.entity.ImageGenerationTask;
 import com.ym.ai_story_studio_server.exception.RetryableAiException;
@@ -21,7 +24,7 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class ImagePollConsumerTest {
 
-    @Mock private GeeknowClient geeknowClient;
+    @Mock private ImageGenerationProvider imageProvider;
     @Mock private ImageGenerationTaskService generationTaskService;
     @Mock private AsyncImageTaskService asyncImageTaskService;
     @Mock private MQProducer mqProducer;
@@ -34,7 +37,7 @@ class ImagePollConsumerTest {
     @BeforeEach
     void setUp() {
         consumer = new ImagePollConsumer(
-                geeknowClient,
+                imageProvider,
                 generationTaskService,
                 asyncImageTaskService,
                 mqProducer,
@@ -54,7 +57,7 @@ class ImagePollConsumerTest {
 
     @Test
     void pendingTaskIsDelayedBeforeCurrentMessageIsAcked() throws Exception {
-        when(geeknowClient.queryImageTask("provider-7"))
+        when(imageProvider.queryImageTask("provider-7"))
                 .thenReturn(response("processing", List.of()));
 
         consumer.handle(new ImagePollMessage(7L), message, channel);
@@ -67,11 +70,11 @@ class ImagePollConsumerTest {
 
     @Test
     void completedTaskIsPersistedBeforeAck() throws Exception {
-        GeeknowClient.ImageTaskApiResponse response = response(
+        ImageTaskResult response = response(
                 "completed",
-                List.of(new GeeknowClient.ImageTaskData("https://example.com/image.png", null, null))
+                List.of(new ImageGenerationResult.ImageData("https://example.com/image.png", null))
         );
-        when(geeknowClient.queryImageTask("provider-7")).thenReturn(response);
+        when(imageProvider.queryImageTask("provider-7")).thenReturn(response);
         when(generationTaskService.claimCompletion(7L)).thenReturn(true);
 
         consumer.handle(new ImagePollMessage(7L), message, channel);
@@ -83,7 +86,7 @@ class ImagePollConsumerTest {
 
     @Test
     void queryFailureUsesDelayQueueInsteadOfImmediateRequeue() throws Exception {
-        when(geeknowClient.queryImageTask("provider-7"))
+        when(imageProvider.queryImageTask("provider-7"))
                 .thenThrow(new RetryableAiException("temporary"));
         when(generationTaskService.markQueryFailure(7L, "temporary")).thenReturn(1);
 
@@ -96,12 +99,10 @@ class ImagePollConsumerTest {
 
     @Test
     void providerFailureIsTerminalWithoutAnotherPoll() throws Exception {
-        GeeknowClient.ImageTaskApiResponse response = new GeeknowClient.ImageTaskApiResponse(
-                "provider-7", null, "model", "generation_failed", 10,
-                null, null, null, null, List.of(),
-                new com.fasterxml.jackson.databind.ObjectMapper().readTree("{\"message\":\"rejected\"}")
+        ImageTaskResult response = new ImageTaskResult(
+                "provider-7", "model", "generation_failed", 10, List.of(), "rejected"
         );
-        when(geeknowClient.queryImageTask("provider-7")).thenReturn(response);
+        when(imageProvider.queryImageTask("provider-7")).thenReturn(response);
 
         consumer.handle(new ImagePollMessage(7L), message, channel);
 
@@ -116,17 +117,16 @@ class ImagePollConsumerTest {
 
         consumer.handle(new ImagePollMessage(7L), message, channel);
 
-        verifyNoInteractions(geeknowClient);
+        verifyNoInteractions(imageProvider);
         verify(channel).basicAck(41L, false);
     }
 
-    private GeeknowClient.ImageTaskApiResponse response(
+    private ImageTaskResult response(
             String status,
-            List<GeeknowClient.ImageTaskData> data
+            List<ImageGenerationResult.ImageData> data
     ) {
-        return new GeeknowClient.ImageTaskApiResponse(
-                "provider-7", null, "model", status, null,
-                null, null, null, null, data, null
+        return new ImageTaskResult(
+                "provider-7", "model", status, null, data, null
         );
     }
 }

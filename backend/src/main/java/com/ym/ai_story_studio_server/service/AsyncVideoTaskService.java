@@ -9,8 +9,11 @@
 
 package com.ym.ai_story_studio_server.service;
 
+import com.ym.ai_story_studio_server.provider.VideoGenerationProvider;
+import com.ym.ai_story_studio_server.provider.VideoTaskResult;
+import com.ym.ai_story_studio_server.provider.VideoContentResult;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.ym.ai_story_studio_server.client.SudashuiVideoClient;
+
 import com.ym.ai_story_studio_server.common.ResultCode;
 import com.ym.ai_story_studio_server.config.AiProperties;
 import com.ym.ai_story_studio_server.entity.Job;
@@ -68,7 +71,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AsyncVideoTaskService {
 
-    private final SudashuiVideoClient sudashuiVideoClient;
+    private final VideoGenerationProvider videoProvider;
     private final ChargingService chargingService;
     private final StorageService storageService;
     private final JobMapper jobMapper;
@@ -242,10 +245,10 @@ public class AsyncVideoTaskService {
                         pollCount, maxPollCount, jobId, apiTaskId);
 
                 // 带容错的轮询(单次失败不终止整个任务,参考huobao-drama-master)
-                SudashuiVideoClient.VideoTaskResponse statusResponse = null;
+                VideoTaskResult statusResponse = null;
                 try {
                     // 视频生成耗时较长，每个轮询周期只查询一次；瞬时失败留到下个周期再试。
-                    statusResponse = sudashuiVideoClient.queryTaskStatus(apiTaskId);
+                    statusResponse = videoProvider.queryTaskStatus(apiTaskId);
                 } catch (Exception e) {
                     log.warn("任务查询失败，本轮不立即重试 - jobId: {}, 错误: {}",
                             jobId, e.getMessage());
@@ -428,7 +431,7 @@ public class AsyncVideoTaskService {
      */
     private void handleVideoGenerationSuccess(
             Long jobId,
-            SudashuiVideoClient.VideoTaskResponse statusResponse,
+            VideoTaskResult statusResponse,
             String model,
             String aspectRatio,
             Integer duration,
@@ -457,8 +460,8 @@ public class AsyncVideoTaskService {
                 // 上游只公开任务查询端点，完成后从查询响应中的视频 URL 下载，
                 // 再落到项目对象存储，避免业务资产依赖临时上游地址。
                 log.debug("API返回的视频URL: {}", statusResponse.resolvedVideoUrl());
-                SudashuiVideoClient.VideoContentResponse contentResponse =
-                        sudashuiVideoClient.downloadVideoContent(statusResponse);
+                VideoContentResult contentResponse =
+                        videoProvider.downloadVideoContent(statusResponse);
                 ossVideoUrl = uploadVideoBytesToOss(contentResponse, jobId);
                 log.info("视频已上传到对象存储 - jobId: {}, url: {}", jobId, ossVideoUrl);
             }
@@ -696,7 +699,7 @@ public class AsyncVideoTaskService {
         return "SUCCEEDED".equals(status) || "FAILED".equals(status) || "CANCELED".equals(status);
     }
 
-    private String uploadVideoBytesToOss(SudashuiVideoClient.VideoContentResponse contentResponse, Long jobId) {
+    private String uploadVideoBytesToOss(VideoContentResult contentResponse, Long jobId) {
         try {
             byte[] content = contentResponse.content();
             if (content == null || content.length == 0) {

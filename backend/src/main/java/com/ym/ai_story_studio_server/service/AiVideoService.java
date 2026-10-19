@@ -8,7 +8,8 @@
 // {{START_MODIFICATIONS}}
 package com.ym.ai_story_studio_server.service;
 
-import com.ym.ai_story_studio_server.client.SudashuiVideoClient;
+import com.ym.ai_story_studio_server.provider.VideoGenerationProvider;
+import com.ym.ai_story_studio_server.provider.VideoTaskResult;
 import com.ym.ai_story_studio_server.common.ResultCode;
 import com.ym.ai_story_studio_server.config.AiProperties;
 import com.ym.ai_story_studio_server.dto.ai.VideoGenerateRequest;
@@ -39,7 +40,7 @@ import java.util.Map;
  *   <li>异步轮询和后处理由AsyncVideoTaskService负责</li>
  * </ul>
  *
- * <p><strong>支持的模型:</strong> 以 {@link SudashuiVideoClient#SEEDANCE_VIDEO_MODELS} 为准。
+ * <p><strong>支持的模型:</strong> 以 {@link VideoGenerationProvider#SEEDANCE_VIDEO_MODELS} 为准。
  *
  * <p><strong>支持的画幅比例:</strong>
  * <ul>
@@ -93,7 +94,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AiVideoService {
 
-    private final SudashuiVideoClient sudashuiVideoClient;
+    private final VideoGenerationProvider videoProvider;
     private final AsyncVideoTaskService asyncVideoTaskService;  // ✅ 注入独立的异步任务服务
     private final JobMapper jobMapper;
     private final ProjectMapper projectMapper;
@@ -151,7 +152,7 @@ public class AiVideoService {
         String finalPrompt = applyStylePromptPrefix(request.projectId(), request.prompt());
         String model = request.model() != null ? request.model() : videoConfig.getModel();
         String aspectRatio = request.aspectRatio() != null ? request.aspectRatio() : videoConfig.getDefaultAspectRatio();
-        Integer duration = sudashuiVideoClient.resolveVideoDuration(
+        Integer duration = videoProvider.resolveVideoDuration(
                 model,
                 request.duration() != null ? request.duration() : videoConfig.getDefaultDuration()
         );
@@ -185,7 +186,7 @@ public class AiVideoService {
         try {
             // 3. 调用 sudashuiapi Seedance 视频 API 提交生成任务
             log.debug("调用 sudashuiapi Seedance 视频 API 提交任务...");
-            SudashuiVideoClient.VideoTaskResponse apiResponse = sudashuiVideoClient.createVideo(
+            VideoTaskResult apiResponse = videoProvider.createVideo(
                     finalPrompt,
                     model,
                     aspectRatio,

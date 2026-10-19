@@ -1,7 +1,9 @@
 package com.ym.ai_story_studio_server.service;
 
+import com.ym.ai_story_studio_server.provider.ImageGenerationProvider;
+import com.ym.ai_story_studio_server.provider.VideoGenerationProvider;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.ym.ai_story_studio_server.client.ImageGenerationRouter;
+
 import com.ym.ai_story_studio_server.config.AiProperties;
 import com.ym.ai_story_studio_server.dto.ai.BatchGenerateRequest;
 import com.ym.ai_story_studio_server.entity.Job;
@@ -67,7 +69,8 @@ class BatchGenerationServiceTest {
     @Mock
     private ObjectMapper objectMapper;
     @Mock
-    private ImageGenerationRouter imageGenerationRouter;
+    private ImageGenerationProvider imageProvider;
+    @Mock private VideoGenerationProvider videoProvider;
     @Mock
     private AiProperties aiProperties;
 

@@ -1,7 +1,9 @@
 package com.ym.ai_story_studio_server.service;
 
+import com.ym.ai_story_studio_server.provider.ImageGenerationProvider;
+import com.ym.ai_story_studio_server.provider.VideoGenerationProvider;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.ym.ai_story_studio_server.client.ImageGenerationRouter;
+
 import com.ym.ai_story_studio_server.common.ResultCode;
 import com.ym.ai_story_studio_server.config.AiProperties;
 import com.ym.ai_story_studio_server.dto.ai.BatchGenerateRequest;
@@ -114,7 +116,8 @@ public class BatchGenerationService {
     private final SceneLibraryMapper sceneLibraryMapper;
     private final ShotBindingMapper shotBindingMapper;
     private final ObjectMapper objectMapper;
-    private final ImageGenerationRouter imageGenerationRouter;
+    private final ImageGenerationProvider imageProvider;
+    private final VideoGenerationProvider videoProvider;
     private final AiProperties aiProperties;
     private final AiTextService aiTextService;
 
@@ -161,7 +164,7 @@ public class BatchGenerationService {
         // 确定性校验必须发生在建 Job、入队和上传参考图之前。
         String resolvedModel = request.model() != null
                 ? request.model() : aiProperties.getImage().getDefaultModel();
-        String resolvedAspectRatio = imageGenerationRouter.validateImageConfiguration(
+        String resolvedAspectRatio = imageProvider.validateImageConfiguration(
                 resolvedModel,
                 request.aspectRatio() != null
                         ? request.aspectRatio() : aiProperties.getImage().getDefaultAspectRatio());
@@ -221,6 +224,7 @@ public class BatchGenerationService {
      * @throws BusinessException 当项目不存在、无权限或分镜ID无效时抛出
      */
     public BatchGenerateResponse generateVideosBatch(Long projectId, BatchGenerateRequest request) {
+        videoProvider.validateVideoModel(request.model());
         Long userId = UserContext.getUserId();
         log.info("批量生成视频 - userId: {}, projectId: {}, targetCount: {}, mode: {}",
                 userId, projectId, request.targetIds().size(), request.mode());
@@ -290,6 +294,7 @@ public class BatchGenerationService {
      * @throws BusinessException 当项目不存在、无权限或角色ID无效时抛出
      */
     public BatchGenerateResponse generateCharactersBatch(Long projectId, BatchGenerateRequest request) {
+        imageProvider.validateImageConfiguration(request.model(), request.aspectRatio());
         Long userId = UserContext.getUserId();
         log.info("批量生成角色画像 - userId: {}, projectId: {}, targetCount: {}, mode: {}",
                 userId, projectId, request.targetIds().size(), request.mode());
@@ -354,6 +359,7 @@ public class BatchGenerationService {
      * @throws BusinessException 当项目不存在、无权限或场景ID无效时抛出
      */
     public BatchGenerateResponse generateScenesBatch(Long projectId, BatchGenerateRequest request) {
+        imageProvider.validateImageConfiguration(request.model(), request.aspectRatio());
         Long userId = UserContext.getUserId();
         log.info("批量生成场景画像 - userId: {}, projectId: {}, targetCount: {}, mode: {}",
                 userId, projectId, request.targetIds().size(), request.mode());
@@ -459,6 +465,7 @@ public class BatchGenerationService {
      * @throws BusinessException 当项目不存在、无权限或道具ID无效时抛出
      */
     public BatchGenerateResponse generatePropsBatch(Long projectId, BatchGenerateRequest request) {
+        imageProvider.validateImageConfiguration(request.model(), request.aspectRatio());
         Long userId = UserContext.getUserId();
         log.info("批量生成道具画像 - userId: {}, projectId: {}, targetCount: {}, mode: {}",
                 userId, projectId, request.targetIds().size(), request.mode());
@@ -548,7 +555,7 @@ public class BatchGenerationService {
         validateShotIds(projectId, java.util.List.of(shotId));
 
         String resolvedModel = model != null ? model : aiProperties.getImage().getDefaultModel();
-        String resolvedAspectRatio = imageGenerationRouter.validateImageConfiguration(
+        String resolvedAspectRatio = imageProvider.validateImageConfiguration(
                 resolvedModel,
                 aspectRatio != null ? aspectRatio : aiProperties.getImage().getDefaultAspectRatio());
 
@@ -640,6 +647,7 @@ public class BatchGenerationService {
      * @throws BusinessException 当项目不存在、无权限或分镜ID无效时抛出
      */
     public BatchGenerateResponse generateSingleShotVideo(Long projectId, Long shotId, ShotVideoGenerateRequest request) {
+        videoProvider.validateVideoModel(request.model());
         Long userId = UserContext.getUserId();
         log.info("单个分镜视频生成 - userId: {}, projectId: {}, shotId: {}, promptLength: {}",
                 userId, projectId, shotId, request.prompt().length());

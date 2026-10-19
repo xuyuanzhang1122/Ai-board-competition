@@ -1,7 +1,9 @@
 package com.ym.ai_story_studio_server.mq;
 
+import com.ym.ai_story_studio_server.provider.ImageGenerationProvider;
+import com.ym.ai_story_studio_server.provider.ImageTaskResult;
 import com.rabbitmq.client.Channel;
-import com.ym.ai_story_studio_server.client.GeeknowClient;
+
 import com.ym.ai_story_studio_server.config.AiProperties;
 import com.ym.ai_story_studio_server.entity.ImageGenerationTask;
 import com.ym.ai_story_studio_server.exception.RetryableAiException;
@@ -27,7 +29,7 @@ public class ImagePollConsumer {
 
     private static final int MAX_CONSECUTIVE_FAILURES = 10;
 
-    private final GeeknowClient geeknowClient;
+    private final ImageGenerationProvider imageProvider;
     private final ImageGenerationTaskService generationTaskService;
     private final AsyncImageTaskService asyncImageTaskService;
     private final MQProducer mqProducer;
@@ -56,9 +58,9 @@ public class ImagePollConsumer {
             return;
         }
 
-        GeeknowClient.ImageTaskApiResponse response;
+        ImageTaskResult response;
         try {
-            response = geeknowClient.queryImageTask(task.getProviderTaskId());
+            response = imageProvider.queryImageTask(task.getProviderTaskId());
         } catch (RetryableAiException queryError) {
             int failures = generationTaskService.markQueryFailure(localTaskId, queryError.getMessage());
             log.warn("图片任务单次查询失败 - generationTaskId: {}, providerTaskId: {}, failures: {}/{}, error: {}",
@@ -106,7 +108,7 @@ public class ImagePollConsumer {
 
     private void handleCompleted(
             ImageGenerationTask task,
-            GeeknowClient.ImageTaskApiResponse response,
+            ImageTaskResult response,
             long deliveryTag,
             Channel channel
     ) throws Exception {
@@ -160,7 +162,7 @@ public class ImagePollConsumer {
                 || "success".equalsIgnoreCase(status);
     }
 
-    private boolean isFailed(GeeknowClient.ImageTaskApiResponse response) {
+    private boolean isFailed(ImageTaskResult response) {
         if (response.errorMessage() != null && !response.errorMessage().isBlank()) return true;
         String status = response.status();
         if (status == null) return false;

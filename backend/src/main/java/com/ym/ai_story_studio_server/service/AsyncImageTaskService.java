@@ -1,10 +1,12 @@
 package com.ym.ai_story_studio_server.service;
 
+import com.ym.ai_story_studio_server.provider.ImageGenerationProvider;
+import com.ym.ai_story_studio_server.provider.ImageGenerationResult;
+import com.ym.ai_story_studio_server.provider.ImageTaskResult;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.ym.ai_story_studio_server.client.GeeknowClient;
-import com.ym.ai_story_studio_server.client.ImageGenerationRouter;
+
 import com.ym.ai_story_studio_server.common.ResultCode;
 import com.ym.ai_story_studio_server.config.AiProperties;
 import com.ym.ai_story_studio_server.entity.Job;
@@ -54,8 +56,7 @@ public class AsyncImageTaskService {
     /** 连续查询失败达到该次数后放弃任务，避免硬错误反复重试。 */
     private static final int MAX_CONSECUTIVE_QUERY_FAILURES = 10;
 
-    private final GeeknowClient geeknowClient;
-    private final ImageGenerationRouter imageGenerationRouter;
+    private final ImageGenerationProvider imageProvider;
     private final ChargingService chargingService;
     private final StorageService storageService;
     private final JobMapper jobMapper;
@@ -170,9 +171,9 @@ public class AsyncImageTaskService {
 
                 // 每轮只查一次；单次失败不终止任务，连续失败过多则止损，
                 // 避免解析类硬错误反复重试打爆上游。
-                GeeknowClient.ImageTaskApiResponse statusResponse;
+                ImageTaskResult statusResponse;
                 try {
-                    statusResponse = geeknowClient.queryImageTask(apiTaskId);
+                    statusResponse = imageProvider.queryImageTask(apiTaskId);
                     consecutiveQueryFailures = 0;
                 } catch (Exception e) {
                     consecutiveQueryFailures++;
@@ -263,7 +264,7 @@ public class AsyncImageTaskService {
                 referenceImageUrls != null ? referenceImageUrls.size() : 0,
                 Thread.currentThread().getName());
         try {
-            GeeknowClient.ImageApiResponse apiResponse = imageGenerationRouter.generateImage(
+            ImageGenerationResult apiResponse = imageProvider.generateImage(
                     ctx.prompt(),
                     ctx.model(),
                     ctx.aspectRatio(),
@@ -375,10 +376,10 @@ public class AsyncImageTaskService {
 
     private void handleImageTaskSuccess(
             String apiTaskId,
-            GeeknowClient.ImageTaskApiResponse statusResponse,
+            ImageTaskResult statusResponse,
             ImageTaskContext ctx
     ) {
-        List<GeeknowClient.ImageApiResponse.ImageData> images =
+        List<ImageGenerationResult.ImageData> images =
                 statusResponse.toImageResponse().data();
         if (images.isEmpty()) {
             handleImageTaskFailure(ctx, "图片生成完成但未返回图片数据");
@@ -393,13 +394,13 @@ public class AsyncImageTaskService {
      */
     public void completeQueuedImageTask(
             Long generationTaskId,
-            GeeknowClient.ImageTaskApiResponse statusResponse
+            ImageTaskResult statusResponse
     ) {
         ImageGenerationTask task = imageGenerationTaskService.get(generationTaskId);
         if (task == null || imageGenerationTaskService.isTerminal(task.getStatus())) {
             return;
         }
-        List<GeeknowClient.ImageApiResponse.ImageData> images = statusResponse.toImageResponse().data();
+        List<ImageGenerationResult.ImageData> images = statusResponse.toImageResponse().data();
         if (images.isEmpty()) {
             throw new BusinessException(ResultCode.AI_SERVICE_ERROR, "图片生成完成但未返回图片数据");
         }

@@ -1,7 +1,8 @@
 package com.ym.ai_story_studio_server.service;
 
+import com.ym.ai_story_studio_server.provider.ImageGenerationProvider;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.ym.ai_story_studio_server.client.GeeknowClient;
+
 import com.ym.ai_story_studio_server.config.AiProperties;
 import com.ym.ai_story_studio_server.entity.Job;
 import com.ym.ai_story_studio_server.entity.JobItem;
@@ -24,7 +25,7 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class AsyncVideoTaskServiceTest {
 
-    @Mock private GeeknowClient geeknowClient;
+    @Mock private ImageGenerationProvider imageProvider;
     @Mock private ChargingService chargingService;
     @Mock private StorageService storageService;
     @Mock private JobMapper jobMapper;

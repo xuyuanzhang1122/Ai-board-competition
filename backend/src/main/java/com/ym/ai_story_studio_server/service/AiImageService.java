@@ -1,7 +1,7 @@
 package com.ym.ai_story_studio_server.service;
 
-import com.ym.ai_story_studio_server.client.GeeknowClient;
-import com.ym.ai_story_studio_server.client.ImageGenerationRouter;
+import com.ym.ai_story_studio_server.provider.ImageGenerationProvider;
+import com.ym.ai_story_studio_server.provider.ImageGenerationResult;
 import com.ym.ai_story_studio_server.common.ResultCode;
 import com.ym.ai_story_studio_server.config.AiProperties;
 import com.ym.ai_story_studio_server.dto.ai.ImageGenerateRequest;
@@ -44,7 +44,7 @@ import java.util.Map;
  *   <li>自动进行积分计费</li>
  * </ul>
  *
- * <p><strong>支持的模型:</strong> 以 {@link GeeknowClient} 的图片模型白名单为准。
+ * <p><strong>支持的模型:</strong> 以 {@link ImageGenerationProvider} 的图片模型白名单为准。
  *
  * <p><strong>支持的画幅比例:</strong>
  * <ul>
@@ -88,7 +88,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AiImageService {
 
-    private final ImageGenerationRouter imageGenerationRouter;
+    private final ImageGenerationProvider imageProvider;
     private final ChargingService chargingService;
     private final StorageService storageService;
     private final JobMapper jobMapper;
@@ -119,6 +119,7 @@ public class AiImageService {
         AiProperties.Image imageConfig = aiProperties.getImage();
         String model = request.model() != null ? request.model() : imageConfig.getDefaultModel();
         String aspectRatio = request.aspectRatio() != null ? request.aspectRatio() : imageConfig.getDefaultAspectRatio();
+        imageProvider.validateImageConfiguration(model, aspectRatio);
 
         // 2. 创建任务记录
         Job job = createJob(userId, request.projectId(), model, aspectRatio, request.prompt());
@@ -153,6 +154,8 @@ public class AiImageService {
                 log.error("任务不存在 - jobId: {}", jobId);
                 return;
             }
+
+            imageProvider.validateImageConfiguration(model, aspectRatio);
 
             // 设置用户上下文
             UserContext.setUserId(job.getUserId());
@@ -250,6 +253,7 @@ public class AiImageService {
         AiProperties.Image imageConfig = aiProperties.getImage();
         String model = request.model() != null ? request.model() : imageConfig.getDefaultModel();
         String aspectRatio = request.aspectRatio() != null ? request.aspectRatio() : imageConfig.getDefaultAspectRatio();
+        imageProvider.validateImageConfiguration(model, aspectRatio);
 
         log.debug("Applied config - model: {}, aspectRatio: {}", model, aspectRatio);
 
@@ -338,7 +342,7 @@ public class AiImageService {
      * 其余模型保持原有 GeekNow 渠道行为(固定生成1张)不变。
      */
     private List<String> callImageProvider(ImageGenerateRequest request, String model, String aspectRatio) {
-        GeeknowClient.ImageApiResponse apiResponse = imageGenerationRouter.generateImage(
+        ImageGenerationResult apiResponse = imageProvider.generateImage(
                 request.prompt(),
                 model,
                 aspectRatio,
@@ -352,7 +356,7 @@ public class AiImageService {
             throw new BusinessException(ResultCode.AI_SERVICE_ERROR, "图片生成API返回的图片数据为空 - model: " + model);
         }
         List<String> allImageData = apiResponse.data().stream()
-                .map(GeeknowClient.ImageApiResponse.ImageData::url)
+                .map(ImageGenerationResult.ImageData::url)
                 .filter(url -> url != null && !url.isBlank())
                 .toList();
         if (allImageData.isEmpty()) {

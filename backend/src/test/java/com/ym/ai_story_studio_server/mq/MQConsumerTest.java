@@ -1,10 +1,11 @@
 package com.ym.ai_story_studio_server.mq;
 
+import com.ym.ai_story_studio_server.provider.ImageGenerationProvider;
+import com.ym.ai_story_studio_server.provider.ImageTaskResult;
+import com.ym.ai_story_studio_server.provider.VideoGenerationProvider;
 import com.rabbitmq.client.Channel;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.ym.ai_story_studio_server.client.GeeknowClient;
-import com.ym.ai_story_studio_server.client.ImageGenerationRouter;
-import com.ym.ai_story_studio_server.client.SudashuiVideoClient;
+
 import com.ym.ai_story_studio_server.common.ResultCode;
 import com.ym.ai_story_studio_server.config.AiProperties;
 import com.ym.ai_story_studio_server.dto.ai.VideoGenerateRequest;
@@ -93,9 +94,8 @@ class MQConsumerTest {
     }
 
 
-    @Mock private GeeknowClient geeknowClient;
-    @Mock private ImageGenerationRouter imageGenerationRouter;
-    @Mock private SudashuiVideoClient sudashuiVideoClient;
+    @Mock private ImageGenerationProvider imageProvider;
+    @Mock private VideoGenerationProvider videoProvider;
     @Mock private StorageService storageService;
     @Mock private AssetCreationService assetCreationService;
     @Mock private ChargingService chargingService;
@@ -144,7 +144,7 @@ class MQConsumerTest {
                 .thenReturn(new ImageReferenceUploadService.UploadClaim(upload, true));
         when(storageService.download("/uploads/ref.png"))
                 .thenReturn(new ByteArrayInputStream(new byte[]{1, 2, 3}));
-        when(geeknowClient.uploadImageForPublicUrl(any(), eq("ref.png"), eq("image/png")))
+        when(imageProvider.uploadReferenceImage(any(), eq("ref.png"), eq("image/png")))
                 .thenReturn("https://oss.example/ref.png");
 
         @SuppressWarnings("unchecked")
@@ -169,9 +169,9 @@ class MQConsumerTest {
         when(shotBindingMapper.selectList(any())).thenReturn(List.of());
         when(imageGenerationTaskService.isJobActive(45L)).thenReturn(true);
         when(imageGenerationTaskService.isJobItemTerminal(45L, 1099L)).thenReturn(false);
-        when(imageGenerationRouter.validateImageConfiguration("gpt-image-2-pro", "1:1"))
+        when(imageProvider.validateImageConfiguration("gpt-image-2-pro", "1:1"))
                 .thenReturn("1:1");
-        when(imageGenerationRouter.supportsAsyncImageTask("gpt-image-2-pro")).thenReturn(true);
+        when(imageProvider.supportsAsyncImageTask("gpt-image-2-pro")).thenReturn(true);
         ImageGenerationTask generationTask = new ImageGenerationTask();
         generationTask.setId(700L);
         generationTask.setJobId(45L);
@@ -180,10 +180,9 @@ class MQConsumerTest {
                 eq(45L), eq(1099L), eq(0), eq(1L), eq(14L),
                 anyString(), eq("gpt-image-2-pro"), eq("1:1")))
                 .thenReturn(new ImageGenerationTaskService.SubmissionClaim(generationTask, true));
-        when(geeknowClient.submitImageTask(anyString(), eq("gpt-image-2-pro"), eq("1:1"), anyList()))
-                .thenReturn(new GeeknowClient.ImageTaskApiResponse(
-                        "provider-task-1", null, "gpt-image-2-pro", "queued", 0,
-                        null, null, null, null, List.of(), null));
+        when(imageProvider.submitImageTask(anyString(), eq("gpt-image-2-pro"), eq("1:1"), anyList()))
+                .thenReturn(new ImageTaskResult(
+                        "provider-task-1", "gpt-image-2-pro", "queued", 0, List.of(), null));
         ImageGenerationTask submittedTask = new ImageGenerationTask();
         submittedTask.setId(700L);
         submittedTask.setJobId(45L);
@@ -205,7 +204,7 @@ class MQConsumerTest {
     @Test
     void unsupportedAspectRatioIsDeadLetteredWithoutRetry() throws Exception {
         when(imageGenerationTaskService.isJobActive(46L)).thenReturn(true);
-        when(imageGenerationRouter.validateImageConfiguration("gpt-image-2", "21:9"))
+        when(imageProvider.validateImageConfiguration("gpt-image-2", "21:9"))
                 .thenThrow(new BusinessException(ResultCode.PARAM_INVALID, "unsupported ratio"));
         BatchTaskMessage payload = new BatchTaskMessage(
                 46L, 1L, 14L, List.of(1100L), "ALL", 1, "21:9", "gpt-image-2"
@@ -231,7 +230,7 @@ class MQConsumerTest {
         prop.setDisplayName("锦被");
         prop.setOverrideDescription("新制的锦被");
         when(projectPropMapper.selectById(253L)).thenReturn(prop);
-        when(imageGenerationRouter.generateImage(anyString(), eq("gpt-image-2"), eq("1:1"), anyList()))
+        when(imageProvider.generateImage(anyString(), eq("gpt-image-2"), eq("1:1"), anyList()))
                 .thenThrow(new BusinessException(ResultCode.AI_SERVICE_ERROR, "provider unavailable"));
 
         BatchTaskMessage message = new BatchTaskMessage(
@@ -240,7 +239,7 @@ class MQConsumerTest {
         ReflectionTestUtils.invokeMethod(consumer, "executeBatchPropImageGeneration", message);
 
         verify(propLibraryMapper, never()).selectById(anyLong());
-        verify(imageGenerationRouter).generateImage(anyString(), eq("gpt-image-2"), eq("1:1"), anyList());
+        verify(imageProvider).generateImage(anyString(), eq("gpt-image-2"), eq("1:1"), anyList());
         assertThat(terminalJobUpdate().getErrorMessage()).isEqualTo("provider unavailable");
     }
 
@@ -255,7 +254,7 @@ class MQConsumerTest {
         current.setId(51L);
         current.setStatus("PENDING");
         when(jobMapper.selectById(51L)).thenReturn(current);
-        when(sudashuiVideoClient.resolveVideoDuration("sd-api-2-fast-720p", 11))
+        when(videoProvider.resolveVideoDuration("sd-api-2-fast-720p", 11))
                 .thenReturn(11);
         ShotBinding sceneBinding = new ShotBinding();
         sceneBinding.setShotId(1097L);
@@ -291,7 +290,8 @@ class MQConsumerTest {
         current.setId(61L);
         current.setStatus("PENDING");
         when(jobMapper.selectById(61L)).thenReturn(current);
-        when(sudashuiVideoClient.resolveVideoDuration("sd-api-2-fast-720p", 5)).thenReturn(5);
+        when(videoProvider.resolveVideoDuration("sd-api-2-fast-720p", 5)).thenReturn(5);
+        when(videoProvider.supportsMultipleReferenceImages("sd-api-2-fast-720p")).thenReturn(true);
 
         ShotBinding sceneBinding = new ShotBinding();
         sceneBinding.setShotId(2001L);

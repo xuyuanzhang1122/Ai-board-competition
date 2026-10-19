@@ -1,6 +1,7 @@
 package com.ym.ai_story_studio_server.service;
 
-import com.ym.ai_story_studio_server.client.GeeknowClient;
+import com.ym.ai_story_studio_server.provider.ImageGenerationProvider;
+import com.ym.ai_story_studio_server.provider.ImageGenerationResult;
 import com.ym.ai_story_studio_server.common.ResultCode;
 import com.ym.ai_story_studio_server.config.AiProperties;
 import com.ym.ai_story_studio_server.dto.ai.ImageGenerateRequest;
@@ -86,7 +87,7 @@ public class AsyncBatchTaskService {
     private final com.ym.ai_story_studio_server.mapper.ProjectSceneMapper projectSceneMapper;
     
     // 新增依赖：用于直接创建Asset记录
-    private final GeeknowClient geeknowClient;
+    private final ImageGenerationProvider imageProvider;
     private final StorageService storageService;
     private final AssetCreationService assetCreationService;
     private final ChargingService chargingService;
@@ -200,7 +201,7 @@ public class AsyncBatchTaskService {
                             // 1. 调用AI生成图片，传入角色图片作为参考图
                             log.info("调用AI生成图片 [{}/{}] - shotId: {}, prompt: {}, referenceImages: {}", 
                                     j + 1, countPerItem, shotId, prompt, referenceImageUrls.size());
-                            GeeknowClient.ImageApiResponse apiResponse = geeknowClient.generateImage(
+                            ImageGenerationResult apiResponse = imageProvider.generateImage(
                                     prompt,
                                     finalModel,
                                     finalAspectRatio,
