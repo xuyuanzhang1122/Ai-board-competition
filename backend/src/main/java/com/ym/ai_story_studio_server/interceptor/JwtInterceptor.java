@@ -17,6 +17,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
+import org.springframework.web.servlet.HandlerMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.core.annotation.AnnotatedElementUtils;
+import org.springframework.web.util.pattern.PathPattern;
 
 /**
  * JWT拦截器
@@ -119,7 +123,7 @@ public class JwtInterceptor implements HandlerInterceptor {
             String type = jwtUtil.getTypeFromToken(token);
 
             // 8. 基于路径做 USER / ADMIN 隔离
-            boolean isAdminPath = request.getRequestURI().startsWith("/api/admin/");
+            boolean isAdminPath = isAdminHandler(request, handlerMethod);
 
             if (isAdminPath) {
                 // 管理域接口：只允许 ADMIN token
@@ -167,6 +171,19 @@ public class JwtInterceptor implements HandlerInterceptor {
             log.error("请求 {} 的Token解析异常: {}", request.getRequestURI(), e.getMessage(), e);
             return handleAuthError(response, ResultCode.UNAUTHORIZED, "认证失败，请重新登录");
         }
+    }
+
+    /** Authorize the matched server handler, not raw URI spelling (matrix parameters/encoding). */
+    private boolean isAdminHandler(HttpServletRequest request, HandlerMethod handler) {
+        Object pattern = request.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
+        if (pattern instanceof String path) return adminPath(path);
+        if (pattern instanceof PathPattern path) return adminPath(path.getPatternString());
+        RequestMapping mapping = AnnotatedElementUtils.findMergedAnnotation(handler.getBeanType(), RequestMapping.class);
+        return mapping != null && java.util.Arrays.stream(mapping.value()).anyMatch(this::adminPath);
+    }
+
+    private boolean adminPath(String path) {
+        return "/api/admin".equals(path) || path.startsWith("/api/admin/");
     }
 
     /**
