@@ -15,6 +15,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -104,6 +105,7 @@ public class AiTextService {
      * @param request 文本生成请求参数
      * @return 文本生成响应（仅包含jobId和model）
      */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public TextGenerateResponse generateTextAsync(TextGenerateRequest request) {
         Long userId = UserContext.getUserId();
         log.info("异步文本生成任务提交 - userId: {}, promptLength: {}",
@@ -230,8 +232,8 @@ public class AiTextService {
      *
      * <p><strong>注意事项:</strong>
      * <ul>
-     *   <li>该方法使用@Transactional确保任务创建和计费的原子性</li>
-     *   <li>如果API调用失败,任务状态会更新为FAILED</li>
+     *   <li>挂起调用方事务，任务快照和执行结果独立提交，不随业务回滚消失</li>
+     *   <li>HTTP 调用期间不持有业务数据库事务；失败任务保留为 FAILED</li>
      *   <li>参赛版不扣除用户积分，供应商用量单独记录</li>
      * </ul>
      *
@@ -239,7 +241,7 @@ public class AiTextService {
      * @return 文本生成响应(包含生成的文本、消耗token数、费用等)
      * @throws BusinessException 当API调用失败或参数错误时抛出
      */
-    @Transactional(rollbackFor = Exception.class)
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public TextGenerateResponse generateText(TextGenerateRequest request) {
         Long userId = UserContext.getUserId();
         log.info("Starting text generation - userId: {}, promptLength: {}",
@@ -317,6 +319,7 @@ public class AiTextService {
             );
 
         } catch (BusinessException e) {
+            updateJobFailed(job, e.getMessage());
             throw e;
         } catch (Exception e) {
             // 任务失败,更新任务状态

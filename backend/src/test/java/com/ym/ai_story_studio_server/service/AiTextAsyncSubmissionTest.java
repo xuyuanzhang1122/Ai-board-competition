@@ -39,7 +39,7 @@ class AiTextAsyncSubmissionTest {
             ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
             executor.setCorePoolSize(1);
             executor.setMaxPoolSize(1);
-            executor.setQueueCapacity(0);
+            executor.setQueueCapacity(1);
             executor.setThreadNamePrefix("text-test-");
             executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
             return executor;
@@ -127,6 +127,7 @@ class AiTextAsyncSubmissionTest {
                 try { release.await(5, TimeUnit.SECONDS); }
                 catch (InterruptedException e) { Thread.currentThread().interrupt(); }
             });
+            context.getBean(ThreadPoolTaskExecutor.class).execute(() -> {});
             UserContext.setUserId(1L);
             try {
                 assertThatThrownBy(() -> context.getBean(AiTextService.class).generateTextAsync(
