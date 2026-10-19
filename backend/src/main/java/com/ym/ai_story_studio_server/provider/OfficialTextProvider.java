@@ -29,19 +29,22 @@ public class OfficialTextProvider implements TextGenerationProvider, DisposableB
     private static final Set<String> MIMO_ENDPOINTS = Set.of(
             "https://api.xiaomimimo.com/v1", "https://token-plan-cn.xiaomimimo.com/v1");
     private final TextProviderProperties properties;
+    private final TextModelAccess modelAccess;
     private final RestClient.Builder builder;
     private final HttpComponentsClientHttpRequestFactory ownedFactory;
     private final ObjectMapper mapper = new ObjectMapper();
 
     @Autowired
-    public OfficialTextProvider(TextProviderProperties properties) {
+    public OfficialTextProvider(TextProviderProperties properties, TextModelAccess modelAccess) {
         this.properties = properties;
+        this.modelAccess = modelAccess;
         this.ownedFactory = productionRequestFactory();
         this.builder = RestClient.builder().requestFactory(ownedFactory);
     }
 
-    OfficialTextProvider(TextProviderProperties properties, RestClient.Builder builder) {
+    OfficialTextProvider(TextProviderProperties properties, RestClient.Builder builder, TextModelAccess modelAccess) {
         this.properties = properties;
+        this.modelAccess = modelAccess;
         this.builder = builder;
         this.ownedFactory = null;
     }
@@ -92,6 +95,7 @@ public class OfficialTextProvider implements TextGenerationProvider, DisposableB
                 || topP != null && (!Double.isFinite(topP) || topP <= 0 || topP > 1)) {
             throw new BusinessException(ResultCode.PARAM_INVALID, "文本输入或生成参数不合法");
         }
+        modelAccess.requireEnabled(model);
     }
 
     @Override

@@ -128,7 +128,8 @@ class AiTextServiceProviderTest {
         JobMapper jobs = mock(JobMapper.class);
         AiProperties settings = new AiProperties();
         settings.getText().setMaxTokens(0);
-        AiTextService service = new AiTextService(new OfficialTextProvider(properties), charging, jobs, settings, new ObjectMapper());
+        AiTextService service = new AiTextService(new OfficialTextProvider(properties,
+                mock(com.ym.ai_story_studio_server.provider.TextModelAccess.class)), charging, jobs, settings, new ObjectMapper());
         TextGenerateRequest request = new TextGenerateRequest("八仙过海", null, null, 1L);
         assertThatThrownBy(() -> service.generateText(request)).isInstanceOf(BusinessException.class);
         verifyNoInteractions(charging, jobs);

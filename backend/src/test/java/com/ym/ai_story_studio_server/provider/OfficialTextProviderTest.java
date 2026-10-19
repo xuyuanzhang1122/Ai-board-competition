@@ -17,11 +17,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.*;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.*;
+import static org.mockito.Mockito.*;
 
 class OfficialTextProviderTest {
     private TextProviderProperties properties;
     private MockRestServiceServer server;
     private OfficialTextProvider provider;
+    private TextModelAccess modelAccess;
 
     @Test
     void productionTransportSupportsExplicitRetryDisabling() throws Exception {
@@ -99,12 +101,22 @@ class OfficialTextProviderTest {
         properties = new TextProviderProperties();
         RestClient.Builder builder = RestClient.builder();
         server = MockRestServiceServer.bindTo(builder).build();
-        provider = new OfficialTextProvider(properties, builder);
+        modelAccess = mock(TextModelAccess.class);
+        provider = new OfficialTextProvider(properties, builder, modelAccess);
     }
 
     private void enable(TextProviderProperties.Endpoint endpoint) {
         endpoint.setEnabled(true);
         endpoint.setApiKey("test-only-key");
+    }
+
+    @Test
+    void disabledCatalogCannotBeBypassedThroughDirectProviderCalls() {
+        enable(properties.getDeepseek());
+        doThrow(new BusinessException(ResultCode.CONFIG_ERROR, "disabled"))
+                .when(modelAccess).requireEnabled("deepseek-flash");
+        assertThatThrownBy(() -> generate("deepseek-flash")).isInstanceOf(BusinessException.class);
+        server.verify();
     }
 
     private TextGenerationResult generate(String model) {
