@@ -68,7 +68,7 @@ export function buildVideoGenerationRequest(
         thumbnailUrl: character.thumbnailUrl as string,
       })),
     duration: options.duration,
-    model: options.model || 'sd-api-2-fast-720p',
+    model: options.model || '',
     prompt: `${VIDEO_PROMPT_PREFIX}${shot.scriptText.trim() || '（无剧本内容）'}`,
     props: shot.props
       .filter((prop) => Boolean(prop.thumbnailUrl))

@@ -67,7 +67,7 @@ export async function generateShotImages(
     const response = await deps.generateSingleShot(input.projectId, input.shot.id, {
       aspectRatio: input.aspectRatio,
       customPrompt: prompt,
-      model: input.model || 'gemini-3-pro-image-preview',
+      model: input.model || '',
       referenceImageUrl: referenceImageUrl ?? undefined,
     })
     if (!response.jobId) throw new Error('生成任务缺少 jobId')

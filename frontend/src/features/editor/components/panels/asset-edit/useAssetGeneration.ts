@@ -28,9 +28,9 @@ import type { EditableAssetType } from './types'
 import { isValidThumbnailUrl } from './useAssetHistory'
 
 export const DEFAULT_MODELS: Record<EditableAssetType, string> = {
-  character: 'gemini-3-pro-image-preview',
-  prop: 'gemini-3-pro-image-preview',
-  scene: 'gemini-3.1-flash-image-preview',
+  character: '',
+  prop: '',
+  scene: '',
 }
 
 export interface AssetGenerationInput {

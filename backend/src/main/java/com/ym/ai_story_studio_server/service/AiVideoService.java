@@ -34,13 +34,13 @@ import java.util.Map;
  *
  * <p><strong>核心功能:</strong>
  * <ul>
- *   <li>调用 sudashuiapi Seedance 2.0 API 提交视频异步任务</li>
+ *   <li>调用 中立视频 provider 提交视频异步任务</li>
  *   <li>支持文生视频和图生视频两种模式</li>
  *   <li>创建和管理任务记录</li>
  *   <li>异步轮询和后处理由AsyncVideoTaskService负责</li>
  * </ul>
  *
- * <p><strong>支持的模型:</strong> 以 {@link VideoGenerationProvider#SEEDANCE_VIDEO_MODELS} 为准。
+ * <p><strong>支持的模型:</strong> 以 {@link VideoGenerationProvider} 为准。
  *
  * <p><strong>支持的画幅比例:</strong>
  * <ul>
@@ -110,7 +110,7 @@ public class AiVideoService {
      * <ol>
      *   <li>参数验证和默认值应用</li>
      *   <li>创建任务记录(状态:PENDING)</li>
-     *   <li>调用 GeekNow API 提交视频生成任务</li>
+     *   <li>调用 中立媒体 provider 提交视频生成任务</li>
      *   <li>立即返回响应(包含jobId和PENDING状态)</li>
      *   <li>异步启动后台任务进行轮询和处理</li>
      * </ol>
@@ -184,8 +184,8 @@ public class AiVideoService {
         }
 
         try {
-            // 3. 调用 sudashuiapi Seedance 视频 API 提交生成任务
-            log.debug("调用 sudashuiapi Seedance 视频 API 提交任务...");
+            // 3. 调用 中立视频 provider 提交生成任务
+            log.debug("调用 中立视频 provider 提交任务...");
             VideoTaskResult apiResponse = videoProvider.createVideo(
                     finalPrompt,
                     model,

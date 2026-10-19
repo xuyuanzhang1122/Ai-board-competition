@@ -435,7 +435,7 @@ public class MQConsumer {
                     return;
                 }
 
-                // 4. 提交GeekNow异步图片任务，拿到taskId后立即释放消费线程
+                // 4. 提交图片供应商异步图片任务，拿到taskId后立即释放消费线程
                 ImageTaskResult submitResponse;
                 try {
                     submitResponse = imageProvider.submitImageTask(
@@ -450,7 +450,7 @@ public class MQConsumer {
                 }
                 String apiTaskId = submitResponse.id();
                 if (apiTaskId == null || apiTaskId.isBlank()) {
-                    throw new BusinessException(com.ym.ai_story_studio_server.common.ResultCode.AI_SERVICE_ERROR, "GeekNow未返回图片任务ID");
+                    throw new BusinessException(com.ym.ai_story_studio_server.common.ResultCode.AI_SERVICE_ERROR, "图片供应商未返回图片任务ID");
                 }
 
                 // 5. taskId落库后由Rabbit延迟轮询，不再启动本机while-loop。
@@ -571,7 +571,7 @@ public class MQConsumer {
                         }
                         String apiTaskId = submitResponse.id();
                         if (apiTaskId == null || apiTaskId.isBlank()) {
-                            throw new BusinessException(com.ym.ai_story_studio_server.common.ResultCode.AI_SERVICE_ERROR, "GeekNow未返回图片任务ID");
+                            throw new BusinessException(com.ym.ai_story_studio_server.common.ResultCode.AI_SERVICE_ERROR, "图片供应商未返回图片任务ID");
                         }
                         generationTask = imageGenerationTaskService.recordSubmitted(
                                 generationTask.getId(), apiTaskId);
@@ -1041,14 +1041,8 @@ public class MQConsumer {
     /**
      * 生成"@imageN为XX"的参考图用途说明，放在视频prompt最前面。
      *
-     * <p>sudashuiapi 的 {@code metadata.payload.imageUrls} 是无标签的平铺数组，上游模型靠
-     * prompt 里的 {@code @image1}/{@code @image2}… 标签(按数组位置，而非文件名编号)定位每张图，
-     * 这是文档明确要求的语法糖，不是自造的中文习惯——之前误用中文"图1/图2"纯文字描述，模型
-     * 无法据此对应到具体的参考图。标签前后按文档示例保留空格，帮助上游 tokenizer 识别边界。
-     * (1) 主体(人物)锚定说明放在prompt开头(模型对前段加权最高)，(2) 人物设定图为多视角拼合图时
-     * 必须声明"图内均为同一角色"，否则模型会把不同视角识别为多个人物，造成样貌漂移。
-     * 编号与 {@link #dedupByUrl} 去重后的最终发送顺序严格一致，即 {@code @imageN} 对应
-     * {@code imageUrls[N-1]}。
+     * <p>保留业务参考图顺序说明；新供应商适配时必须重新核验标签和多图语义，
+     * 当前媒体 provider 不可用，不能据此推断任一官方模型支持此格式。
      */
     private String buildVideoReferenceUsagePrompt(List<LabeledReference> references) {
         if (references.isEmpty()) {
@@ -1224,7 +1218,7 @@ public class MQConsumer {
 
                 log.info("生成角色图片 - projectCharacterId: {}, name: {}, prompt: {}", projectCharacterId, characterName, prompt);
 
-                // 5. 调用 GeekNow 生成图片
+                // 5. 调用 图片供应商 生成图片
                 UserContext.setUserId(userId);
                 try {
                     ImageGenerationResult response = imageProvider.generateImage(
@@ -1384,7 +1378,7 @@ public class MQConsumer {
 
                 log.info("生成场景图片 - projectSceneId: {}, name: {}, prompt: {}", projectSceneId, sceneName, prompt);
 
-                // 6. 调用 GeekNow 生成图片
+                // 6. 调用 图片供应商 生成图片
                 UserContext.setUserId(userId);
                 try {
                     ImageGenerationResult response = imageProvider.generateImage(
@@ -1525,7 +1519,7 @@ public class MQConsumer {
 
                 log.info("生成道具图片 - projectPropId: {}, name: {}, prompt: {}", projectPropId, propName, prompt);
 
-                // 5. 调用 GeekNow 生成图片
+                // 5. 调用 图片供应商 生成图片
                 UserContext.setUserId(userId);
                 try {
                     ImageGenerationResult response = imageProvider.generateImage(
@@ -1749,7 +1743,7 @@ public class MQConsumer {
      * 把本地相对图片地址转换为远程模型可读取的形式。
      * 远程提供商无法访问部署实例上的 /uploads/** 相对路径。
      *
-     * <p>优先上传到 GeekNow 对象存储换取公网 URL（异步图片接口只接受 http(s) 素材）；
+     * <p>优先上传到 图片供应商 对象存储换取公网 URL（异步图片接口只接受 http(s) 素材）；
      * 上传失败时回退为 base64 data URI（此时消费侧会改走同步生成路径）。
      */
     private List<String> prepareReferenceImagesForUpstream(Long jobId, List<String> imageUrls) {
@@ -1792,11 +1786,11 @@ public class MQConsumer {
                 String publicUrl = imageProvider.uploadReferenceImage(
                         imageBytes, referenceFileName(imageUrl), contentType);
                 if (publicUrl == null || publicUrl.isBlank()) {
-                    throw new IllegalStateException("GeekNow参考图上传未返回public_url");
+                    throw new IllegalStateException("图片供应商参考图上传未返回public_url");
                 }
                 imageReferenceUploadService.markSucceeded(claim.upload().getId(), publicUrl);
                 prepared.add(publicUrl);
-                log.info("本地参考图首次上传GeekNow并写入批次缓存 - jobId: {}, local: {}, publicUrl: {}",
+                log.info("本地参考图首次上传图片供应商并写入批次缓存 - jobId: {}, local: {}, publicUrl: {}",
                         jobId, imageUrl, publicUrl);
             } catch (Exception e) {
                 imageReferenceUploadService.markFailed(claim.upload().getId(), e.getMessage());
@@ -1807,7 +1801,7 @@ public class MQConsumer {
         return prepared;
     }
 
-    /** 从本地存储URL中提取文件名（去掉查询串），用作GeekNow上传的file_name。 */
+    /** 从本地存储URL中提取文件名（去掉查询串），用作图片供应商上传的file_name。 */
     private String referenceFileName(String imageUrl) {
         String withoutQuery = imageUrl.split("\\?", 2)[0];
         int lastSlash = withoutQuery.lastIndexOf('/');
@@ -1933,7 +1927,7 @@ public class MQConsumer {
 
     /**
      * 参考图是否全部为http(s) URL（空列表视为true）。
-     * GeekNow异步图片接口不接受base64 data URI参考图，含本地参考图时需回退同步生成。
+     * 图片供应商异步图片接口不接受base64 data URI参考图，含本地参考图时需回退同步生成。
      */
     private boolean allHttpUrls(List<String> urls) {
         if (urls == null || urls.isEmpty()) {

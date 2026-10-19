@@ -14,6 +14,23 @@ import static org.mockito.Mockito.*;
 
 class TextModelCatalogTest {
     @Test
+    void unavailableMediaCannotBeAdvertisedOrReenabledEvenWithStaleDatabaseFlags() {
+        var mapper = mock(AiModelMapper.class);
+        var policy = new TextModelPolicy(mock(TextGenerationProvider.class));
+        var admin = new AdminModelServiceImpl(mapper, policy);
+        for (String type : new String[]{"IMAGE", " video ", "unknown"}) {
+            AiModel media = model("unverified-media-model", "official-or-former-supplier", 1);
+            media.setType(type);
+            when(mapper.selectById(1L)).thenReturn(media);
+            assertThat(policy.isAvailable(media)).isFalse();
+            assertThatThrownBy(() -> admin.toggleEnabled(1L, true))
+                    .isInstanceOf(com.ym.ai_story_studio_server.exception.BusinessException.class);
+            admin.toggleEnabled(1L, false);
+            assertThat(media.getEnabled()).isZero();
+        }
+    }
+
+    @Test
     void paddedLanguageTypeCannotBypassLegacyGuard() {
         AiModelMapper mapper = mock(AiModelMapper.class);
         var service = new AdminModelServiceImpl(mapper, new TextModelPolicy(mock(TextGenerationProvider.class)));

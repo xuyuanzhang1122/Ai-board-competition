@@ -79,10 +79,6 @@ public record BatchGenerateRequest(
         @Pattern(regexp = "1:1|16:9|9:16|21:9|4:3|3:4|3:2|2:3", message = "不支持的画幅比例")
         String aspectRatio,
 
-        @Pattern(
-                regexp = "gemini-3-pro-image-preview|gemini-2\\.5-flash-image-preview|gemini-3\\.1-flash-image-preview|gpt-image-2|gpt-image-2-pro|gpt-image-2-vip|doubao-seedream-4-0-250828|doubao-seedream-4-5-251128|doubao-seedream-5-0-260128|grok-4-2-image|sd-2-720p|sd-2-1080p|sd-api-2-720p|sd-api-2-1080p|sd-2-fast-720p|sd-api-2-fast-720p",
-                message = "不支持的模型"
-        )
         String model,
 
         @Min(value = 1, message = "视频时长不能小于1秒")

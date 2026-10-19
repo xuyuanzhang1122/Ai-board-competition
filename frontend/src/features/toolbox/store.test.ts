@@ -79,14 +79,14 @@ describe('toolbox store', () => {
     useToolboxStore.getState().reset()
   })
 
-  it('updates VIDEO input defaults', () => {
+  it('resets VIDEO input without advertising an unavailable ratio', () => {
     useToolboxStore.getState().setCurrentInput({ duration: 20 })
     useToolboxStore.getState().updateInputType('VIDEO')
 
     expect(useToolboxStore.getState().currentInput).toMatchObject({
       type: 'VIDEO',
       model: '',
-      aspectRatio: '16:9',
+      aspectRatio: '',
       duration: 8,
     })
   })

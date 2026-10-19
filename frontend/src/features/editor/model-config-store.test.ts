@@ -24,6 +24,23 @@ describe('model config store', () => {
     Object.assign(globalThis, { localStorage: createStorage() })
   })
 
+  it('clears retired media defaults, saved preferences and project overrides', () => {
+    localStorage.setItem('competition_model_config_v1', JSON.stringify({
+      languageModel: 'mimo-v2.6-pro',
+      characterImageModel: 'gemini-3-pro-image-preview',
+      sceneImageModel: 'gpt-image-2',
+      shotImageModel: 'gpt-image-2-4k',
+      videoModel: 'sd-api-2-fast-720p',
+    }))
+    const store = createModelConfigStore({ videoModel: 'sd-api-2-fast-720p' })
+    expect(store.getState()).toMatchObject({
+      languageModel: 'mimo-v2.6-pro', characterImageModel: '', sceneImageModel: '', shotImageModel: '', videoModel: '',
+    })
+    store.getState().updateConfig({ shotImageModel: 'gpt-image-2', videoModel: 'unverified-model' })
+    expect(store.getState().shotImageModel).toBe('')
+    expect(store.getState().videoModel).toBe('')
+  })
+
   it('starts with default values', () => {
     const useStore = createModelConfigStore()
     expect(useStore.getState()).toMatchObject(DEFAULT_MODEL_CONFIG)
@@ -40,7 +57,7 @@ describe('model config store', () => {
     )
   })
 
-  it('clears obsolete or malformed language preferences without changing media preferences', () => {
+  it('clears obsolete or malformed preferences', () => {
     localStorage.setItem(
       'competition_model_config_v1',
       JSON.stringify({
@@ -50,17 +67,17 @@ describe('model config store', () => {
     )
     const state = createModelConfigStore().getState()
     expect(state.languageModel).toBe('')
-    expect(state.sceneImageModel).toBe('scene-custom')
+    expect(state.sceneImageModel).toBe('')
     state.updateConfig({ languageModel: 'gemini-3.5-flash' })
     expect(createModelConfigStore().getState().languageModel).toBe('')
   })
 
   it('partial updateConfig changes only provided fields', () => {
     const useStore = createModelConfigStore()
-    useStore.getState().updateConfig({ shotImageModel: 'custom-shot' })
+    useStore.getState().updateConfig({ languageModel: 'mimo-v2.6-pro' })
 
     const state = useStore.getState()
-    expect(state.shotImageModel).toBe('custom-shot')
+    expect(state.languageModel).toBe('mimo-v2.6-pro')
     expect(state.videoModel).toBe(DEFAULT_MODEL_CONFIG.videoModel)
   })
 
@@ -83,7 +100,7 @@ describe('model config store', () => {
 
     const useStore = createModelConfigStore()
     const state = useStore.getState()
-    expect(state.sceneImageModel).toBe('scene-custom')
+    expect(state.sceneImageModel).toBe('')
     expect(state.languageModel).toBe(DEFAULT_MODEL_CONFIG.languageModel)
   })
 

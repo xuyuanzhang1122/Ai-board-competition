@@ -20,22 +20,18 @@ export type ModelConfigStoreHook = UseBoundStore<StoreApi<ModelConfigStore>>
 
 const STORAGE_KEY = 'competition_model_config_v1'
 
-// 不自动选择付费文本模型；用户从服务器当前可用目录选择。
-// 图片/视频默认值仍待媒体替换阶段迁移，不能据此宣称 M1 完成。
+// 文本需从当前可用目录主动选择；图片/视频尚未完成接入核验，不能恢复旧偏好。
 export const DEFAULT_MODEL_CONFIG: ModelConfigData = {
-  characterImageModel: 'gemini-3-pro-image-preview',
+  characterImageModel: '',
   languageModel: '',
-  sceneImageModel: 'gemini-3-pro-image-preview',
-  shotImageModel: 'gemini-3-pro-image-preview',
-  videoModel: 'sd-api-2-fast-720p',
+  sceneImageModel: '',
+  shotImageModel: '',
+  videoModel: '',
 }
 
-const toConfig = (state: ModelConfigStore): ModelConfigData => ({
-  characterImageModel: state.characterImageModel,
-  languageModel: state.languageModel,
-  sceneImageModel: state.sceneImageModel,
-  shotImageModel: state.shotImageModel,
-  videoModel: state.videoModel,
+const normalizeConfig = (config: Partial<ModelConfigData>): ModelConfigData => ({
+  ...DEFAULT_MODEL_CONFIG,
+  languageModel: normalizeTextPreference(config.languageModel),
 })
 
 const loadConfig = (): ModelConfigData => {
@@ -44,11 +40,7 @@ const loadConfig = (): ModelConfigData => {
     const stored = localStorage.getItem(STORAGE_KEY)
     if (stored) {
       const parsed = JSON.parse(stored) as Partial<ModelConfigData>
-      return {
-        ...DEFAULT_MODEL_CONFIG,
-        ...parsed,
-        languageModel: normalizeTextPreference(parsed.languageModel),
-      }
+      return normalizeConfig(parsed)
     }
   } catch {
     // Ignore malformed local storage and fall back to defaults.
@@ -69,15 +61,7 @@ export const createModelConfigStore = (
   initialOverrides: Partial<ModelConfigData> = {},
 ): ModelConfigStoreHook =>
   create<ModelConfigStore>((set) => ({
-    ...loadConfig(),
-    ...initialOverrides,
-    ...(initialOverrides.languageModel !== undefined
-      ? {
-          languageModel: normalizeTextPreference(
-            initialOverrides.languageModel,
-          ),
-        }
-      : {}),
+    ...normalizeConfig({ ...loadConfig(), ...initialOverrides }),
 
     resetToDefault() {
       set(() => {
@@ -88,14 +72,8 @@ export const createModelConfigStore = (
 
     updateConfig(config) {
       set((state) => {
-        const next = {
-          ...state,
-          ...config,
-          languageModel: normalizeTextPreference(
-            config.languageModel ?? state.languageModel,
-          ),
-        }
-        saveConfig(toConfig(next))
+        const next = normalizeConfig({ ...state, ...config })
+        saveConfig(next)
         return next
       })
     },

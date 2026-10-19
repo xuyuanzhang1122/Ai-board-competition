@@ -58,10 +58,6 @@ public record ShotVideoGenerateRequest(
         String referenceImageUrl,
 
         @Size(max = 100, message = "模型编码不能超过100个字符")
-        @Pattern(
-                regexp = "sd-2-720p|sd-2-1080p|sd-api-2-720p|sd-api-2-1080p|sd-2-fast-720p|sd-api-2-fast-720p",
-                message = "不支持的 Seedance 2.0 视频模型"
-        )
         String model,
 
         @NotNull(message = "缺少场景画像资产，禁止生成视频")

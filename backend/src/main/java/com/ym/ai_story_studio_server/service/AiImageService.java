@@ -36,7 +36,7 @@ import java.util.Map;
  *
  * <p><strong>核心功能:</strong>
  * <ul>
- *   <li>按 GeekNow 模型家族契约生成图片</li>
+ *   <li>按 图片供应商 模型家族契约生成图片</li>
  *   <li>支持文生图和图生图两种模式</li>
  *   <li>自动下载生成的图片并上传到OSS</li>
  *   <li>自动应用配置中的默认参数</li>
@@ -223,7 +223,7 @@ public class AiImageService {
      * <ol>
      *   <li>参数验证和默认值应用</li>
      *   <li>创建任务记录</li>
-     *   <li>按模型家族调用 GeekNow 图片接口</li>
+     *   <li>按模型家族调用 图片供应商 图片接口</li>
      *   <li>从返回的URL下载图片</li>
      *   <li>上传图片到OSS存储</li>
      *   <li>进行积分计费</li>
@@ -338,8 +338,7 @@ public class AiImageService {
     /**
      * 按模型分发到对应图片生成渠道，统一返回图片数据列表(URL或base64)。
      *
-     * <p>gpt-image-2-4k 走 sub2api 渠道(支持1-4张/质量/输出格式/背景);
-     * 其余模型保持原有 GeekNow 渠道行为(固定生成1张)不变。
+     * <p>仅委托给中立图片 provider；当前实现拒绝全部媒体调用，不存在旧渠道回退。
      */
     private List<String> callImageProvider(ImageGenerateRequest request, String model, String aspectRatio) {
         ImageGenerationResult apiResponse = imageProvider.generateImage(
@@ -445,7 +444,7 @@ public class AiImageService {
      * 判断字符串是否为base64编码
      *
      * <p>简化判断逻辑：如果不是URL且长度足够长，就认为是base64
-     * （GeekNow 返回 URL、裸 Base64 或 data URI）
+     * （图片供应商 返回 URL、裸 Base64 或 data URI）
      *
      * @param data 待判断的字符串
      * @return true表示是base64编码
