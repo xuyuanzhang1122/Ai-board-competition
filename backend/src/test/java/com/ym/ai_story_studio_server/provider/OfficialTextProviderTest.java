@@ -197,12 +197,12 @@ class OfficialTextProviderTest {
     }
 
     @Test
-    void mimoUsesItsOwnTokenLimitAndKey() {
+    void mimoUsesItsOwnTokenLimitAndKeyWithThinkingExplicitlyDisabled() {
         enable(properties.getMimo());
         properties.getMimo().setApiKey("mimo-test-key");
         server.expect(requestTo("https://api.xiaomimimo.com/v1/chat/completions"))
                 .andExpect(header("Authorization", "Bearer mimo-test-key"))
-                .andExpect(content().json("{\"model\":\"mimo-v2.6-pro\",\"max_completion_tokens\":128}"))
+                .andExpect(content().json("{\"model\":\"mimo-v2.6-pro\",\"max_completion_tokens\":128,\"thinking\":{\"type\":\"disabled\"}}"))
                 .andRespond(withSuccess(success(""), MediaType.APPLICATION_JSON));
         assertThat(generate("mimo-v2.6-pro").tokensUsed()).isNull();
         server.verify();

@@ -123,8 +123,9 @@ public class OfficialTextProvider implements TextGenerationProvider, DisposableB
         body.put("stream", false);
         body.put(deepseek ? "max_tokens" : "max_completion_tokens", maxTokens);
         if (temperature != null) body.put("temperature", temperature);
-        if (deepseek) body.put("thinking", Map.of("type", "disabled"));
-        else if (topP != null) body.put("top_p", topP);
+        // Both official APIs default to thinking; keep the bounded text-only contract explicit.
+        body.put("thinking", Map.of("type", "disabled"));
+        if (!deepseek && topP != null) body.put("top_p", topP);
 
         var reservation = budgetLedger.reserve(budgetPolicy.quote(model, maxTokens), UserContext.getUserId());
         TextGenerationResult result;
