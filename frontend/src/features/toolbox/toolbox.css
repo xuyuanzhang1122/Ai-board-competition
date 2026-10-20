@@ -447,6 +447,24 @@
   border-radius: 8px;
   font-size: 12px;
 }
+.toolbox-thinking-dot {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+  margin: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  color: #292929;
+  animation: toolbox-breathe 1.25s ease-in-out infinite;
+}
+.toolbox-send .toolbox-thinking-dot {
+  color: currentColor;
+}
+@keyframes toolbox-breathe {
+  0%, 100% { opacity: 0.45; transform: scale(0.7); }
+  50% { opacity: 1; transform: scale(1); }
+}
 .toolbox-spinner {
   animation: toolbox-spin 1.3s linear infinite;
 }
@@ -456,7 +474,8 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .toolbox-spinner {
+  .toolbox-spinner,
+  .toolbox-thinking-dot {
     animation: none;
   }
 }

@@ -1,18 +1,16 @@
-import AiStudio from '@lobehub/icons/es/AiStudio'
 import type { MenuItemType } from '@lobehub/ui'
 import { Button, Layout, Menu } from '@lobehub/ui'
-import { LogOut, UsersRound } from 'lucide-react'
+import { LogOut, Sparkles, UsersRound } from 'lucide-react'
 import { useEffect } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 
+import { BRANDING } from '@/shared/constants/branding'
 import { useAuthStore } from '@/shared/store/auth'
 
 const NAV_ITEMS: MenuItemType[] = [
   { icon: UsersRound, key: '/users', label: '用户管理' },
-  { icon: AiStudio, key: '/models', label: '模型配置' },
+  { icon: Sparkles, key: '/models', label: '模型配置' },
 ]
-
-const DEVELOPER_GITHUB = 'https://github.com/xuyuanzhang1122?tab=repositories'
 
 export function AdminShell() {
   const location = useLocation()
@@ -38,10 +36,10 @@ export function AdminShell() {
       header={
         <div className="flex h-full items-center justify-between border-b border-border bg-background/95 px-5 backdrop-blur-sm">
           <div className="flex items-center gap-3">
-            <img alt="红鹦鹉漫剧" className="size-9 rounded-lg" src="/favicon.svg" />
+            <img alt={BRANDING.appName} className="size-9 rounded-lg" src="/favicon.svg" />
             <div className="flex flex-col leading-tight">
-              <strong className="text-sm font-semibold">红鹦鹉漫剧</strong>
-              <span className="text-xs text-muted-foreground">管理后台</span>
+              <strong className="text-sm font-semibold">{BRANDING.appName}</strong>
+              <span className="text-xs text-muted-foreground">管理后台 · {BRANDING.teamName}</span>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -64,17 +62,13 @@ export function AdminShell() {
       }
     >
       <div className="flex min-h-[calc(100dvh-64px)] flex-col bg-muted/30 p-6 lg:p-8">
-        <div className="flex-1"><Outlet /></div>
+        <div className="flex-1">
+          <Outlet />
+        </div>
         <footer className="pt-8 text-center text-xs text-muted-foreground">
-          © 2026 红鹦鹉漫剧 · 由 Xumy 开发 ·{' '}
-          <a
-            className="underline-offset-2 transition-colors hover:text-foreground hover:underline"
-            href={DEVELOPER_GITHUB}
-            rel="noopener noreferrer"
-            target="_blank"
-          >
-            GitHub
-          </a>
+          {BRANDING.fullName}
+          <br />
+          {BRANDING.disclaimer}
         </footer>
       </div>
     </Layout>

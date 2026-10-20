@@ -1,13 +1,13 @@
 import './home.css'
 
-import { AiStudio } from '@lobehub/icons'
 import { ActionIcon, Button, Input } from '@lobehub/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowDown, ArrowLeft, FolderPlus, Plus, Search, X } from 'lucide-react'
+import { ArrowDown, ArrowLeft, FolderPlus, Plus, Search, Sparkles, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import logo from '@/assets/logo.svg'
+import { BRANDING } from '@/shared/constants/config'
 import { confirmAction, notify } from '@/shared/feedback/feedback'
 import { useUserStore } from '@/shared/store/user'
 import type { FolderVO, ProjectVO } from '@/shared/types/api'
@@ -202,12 +202,13 @@ export function HomePage() {
         <section className="home-hero-panel overflow-hidden rounded-[28px]">
           <div className="home-hero-content">
             <div className="home-hero-copy">
-              <div className="home-hero-kicker"><AiStudio size={16} /> AI Story Studio</div>
+              <div className="home-hero-kicker"><Sparkles aria-hidden size={16} /> {BRANDING.competition}</div>
               <div className="flex items-center gap-5">
-                <img alt="红鹦鹉漫剧" className="home-hero-logo" src={logo} />
+                <img alt={BRANDING.appName} className="home-hero-logo" src={logo} />
                 <div>
-                  <h1>红鹦鹉<span>漫剧</span></h1>
-                  <p>用 AI（爱）叙事，传递希望与快乐</p>
+                  <h1>AI <span>创作工作台</span></h1>
+                  <p>{BRANDING.teamName}</p>
+                  <p className="home-competition-disclaimer">{BRANDING.disclaimer}</p>
                 </div>
               </div>
             </div>

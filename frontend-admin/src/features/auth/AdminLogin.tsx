@@ -3,9 +3,8 @@ import { App as AntdApp } from 'antd'
 import { type FormEvent, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
+import { BRANDING } from '@/shared/constants/branding'
 import { useAuthStore } from '@/shared/store/auth'
-
-const DEVELOPER_GITHUB = 'https://github.com/xuyuanzhang1122?tab=repositories'
 
 export function AdminLogin() {
   const { message } = AntdApp.useApp()
@@ -38,10 +37,10 @@ export function AdminLogin() {
         onSubmit={handleSubmit}
       >
         <div className="mb-7 flex items-center gap-3">
-          <img alt="红鹦鹉漫剧" className="size-11 rounded-xl" src="/favicon.svg" />
+          <img alt={BRANDING.appName} className="size-11 rounded-xl" src="/favicon.svg" />
           <div>
-            <h1 className="text-lg font-semibold tracking-tight">红鹦鹉漫剧</h1>
-            <p className="mt-0.5 text-sm text-muted-foreground">管理后台</p>
+            <h1 className="text-lg font-semibold tracking-tight">{BRANDING.appName}</h1>
+            <p className="mt-0.5 text-sm text-muted-foreground">管理后台 · {BRANDING.teamName}</p>
           </div>
         </div>
 
@@ -79,16 +78,10 @@ export function AdminLogin() {
           </Button>
         </div>
       </form>
-      <p className="text-xs text-muted-foreground">
-        © 2026 红鹦鹉漫剧 · 由 Xumy 开发 ·{' '}
-        <a
-          className="underline-offset-2 transition-colors hover:text-foreground hover:underline"
-          href={DEVELOPER_GITHUB}
-          rel="noopener noreferrer"
-          target="_blank"
-        >
-          GitHub
-        </a>
+      <p className="max-w-xl text-center text-xs leading-relaxed text-muted-foreground">
+        {BRANDING.fullName}
+        <br />
+        {BRANDING.disclaimer}
       </p>
     </main>
   )

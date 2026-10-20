@@ -41,6 +41,8 @@ export function LoginPage() {
       >
         <div className="flex flex-col gap-1 text-center">
           <h1 className="text-xl font-semibold">{BRANDING.appName}</h1>
+          <p className="text-sm font-medium">{BRANDING.teamName}</p>
+          <p className="text-xs leading-relaxed text-muted-foreground">{BRANDING.competition}</p>
           <p className="text-sm text-muted-foreground">登录以继续</p>
         </div>
         <Input
@@ -66,6 +68,7 @@ export function LoginPage() {
         <Button block htmlType="submit" loading={loading} size="large" type="primary">
           登录
         </Button>
+        <p className="text-center text-xs leading-relaxed text-muted-foreground">{BRANDING.disclaimer}</p>
       </form>
     </div>
   )

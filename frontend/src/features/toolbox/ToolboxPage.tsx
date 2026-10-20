@@ -275,7 +275,7 @@ export function ToolboxPage() {
             {state.sessions.find((item) => item.id === state.activeId)?.title || '新对话'}
           </span>
         </header>
-        {(state.error || state.pending || modelError) && (
+        {(state.error || (state.pending && !state.sending) || modelError) && (
           <div className="toolbox-notice" role="alert">
             <span>
               {state.error ||
@@ -291,7 +291,11 @@ export function ToolboxPage() {
                   })
                 }}
               >
-                {state.sending ? '正在确认…' : '重试原请求'}
+                {state.sending ? (
+                  <span aria-label="正在确认" className="toolbox-thinking-dot" role="status" />
+                ) : (
+                  '重试原请求'
+                )}
               </button>
             )}
             {modelError && (

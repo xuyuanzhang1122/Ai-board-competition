@@ -1,5 +1,5 @@
 import { Markdown } from '@lobehub/ui'
-import { Check, Copy, LoaderCircle, Square } from 'lucide-react'
+import { Check, Copy, Square } from 'lucide-react'
 import { useState } from 'react'
 
 import type { ChatMessage } from '../api'
@@ -46,16 +46,15 @@ export function ConversationMessage({
         </div>
       ) : null}
       {active && (
-        <div className="toolbox-task-status" role="status">
-          <LoaderCircle className="toolbox-spinner" size={16} />
-          <span>{message.status === 'PENDING' ? '已提交，等待处理' : '正在思考…'}</span>
+        <div className="toolbox-task-status">
+          <span aria-label="正在生成回复" className="toolbox-thinking-dot" role="status" />
           <button
-            title="停止任务不会保证上游已停止或退款"
+            aria-label="停止生成"
+            title="停止生成；上游已接受的调用可能仍会执行"
             type="button"
             onClick={() => onCancel(message.id)}
           >
             <Square size={12} />
-            停止任务
           </button>
         </div>
       )}

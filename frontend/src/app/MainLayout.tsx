@@ -1,10 +1,10 @@
-import { AiStudio } from '@lobehub/icons'
 import { Button, Input, Modal } from '@lobehub/ui'
 import {
   ChevronRight,
   CircleDollarSign,
   Home,
   LogOut,
+  Sparkles,
   Upload,
   Users,
   WalletCards,
@@ -26,7 +26,7 @@ const NAV: {
   to: string
 }[] = [
   { icon: Home, key: 'home', label: '首页', to: '/home' },
-  { icon: AiStudio, key: 'toolbox', label: 'AI 工具箱', to: '/toolbox' },
+  { icon: Sparkles, key: 'toolbox', label: 'AI 工具箱', to: '/toolbox' },
   { icon: WalletCards, key: 'wallet', label: '钱包', to: '/wallet' },
   { icon: CircleDollarSign, key: 'recharge', label: '充值', to: '/recharge' },
   { icon: Users, key: 'invite', label: '邀请', to: '/invite' },
@@ -110,10 +110,10 @@ export function MainLayout() {
       <aside className="relative flex w-[248px] shrink-0 flex-col overflow-hidden border-r border-rose-100/70 bg-[linear-gradient(180deg,#fffaf7_0%,#fff_42%,#fff8f5_100%)]">
         <div className="pointer-events-none absolute -left-16 top-20 size-48 rounded-full bg-rose-200/20 blur-3xl" />
         <div className="relative flex items-center gap-3 border-b border-rose-100/70 px-5 py-5">
-          <img alt="红鹦鹉漫剧" className="size-11 rounded-[14px] shadow-sm" src={logo} />
+          <img alt={BRANDING.appName} className="size-11 rounded-[14px] shadow-sm" src={logo} />
           <div className="min-w-0">
             <h1 className="truncate text-base font-bold tracking-tight text-slate-900">{BRANDING.appName}</h1>
-            <p className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.16em] text-slate-400">AI Story Studio</p>
+            <p className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.16em] text-slate-400">{BRANDING.teamName}</p>
           </div>
         </div>
 

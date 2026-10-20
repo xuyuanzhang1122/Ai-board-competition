@@ -85,7 +85,11 @@ export function ChatComposer({
               {(
                 [
                   { value: 'TEXT', label: '文字对话', Icon: MessageSquare },
-                  { value: 'IMAGE', label: '图片生成 · 暂未开放', Icon: ImageIcon },
+                  {
+                    value: 'IMAGE',
+                    label: '图片生成 · 暂未开放',
+                    Icon: ImageIcon,
+                  },
                   { value: 'VIDEO', label: '视频生成 · 暂未开放', Icon: Video },
                 ] as const
               ).map(({ value, label, Icon }) => (
@@ -127,8 +131,18 @@ export function ChatComposer({
             </select>
             <ChevronDown size={15} />
           </label>
-          <button aria-label="发送消息" className="toolbox-send" disabled={disabled} type="submit">
-            <ArrowUp size={22} />
+          <button
+            aria-busy={busy}
+            aria-label="发送消息"
+            className="toolbox-send"
+            disabled={disabled}
+            type="submit"
+          >
+            {busy ? (
+              <span aria-label="正在发送" className="toolbox-thinking-dot" role="status" />
+            ) : (
+              <ArrowUp size={22} />
+            )}
           </button>
         </div>
       </form>

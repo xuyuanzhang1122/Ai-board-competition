@@ -13,8 +13,8 @@
 
 .home-hero-panel {
   position: relative;
-  height: max(360px, calc(100vh - 344px));
-  min-height: 360px;
+  height: auto;
+  min-height: max(360px, calc(100vh - 344px));
   margin-bottom: 16px;
   border: 1px solid rgb(255 255 255 / 70%);
   background-image:
@@ -40,8 +40,9 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 100%;
+  min-height: inherit;
   padding: clamp(32px, 5vw, 78px);
+  padding-bottom: max(64px, 5vw);
 }
 
 .home-hero-copy {
@@ -80,7 +81,14 @@
   letter-spacing: -0.05em;
 }
 
+.home-hero-copy .home-competition-disclaimer {
+  font-size: 12px;
+  letter-spacing: 0;
+  line-height: 1.6;
+}
+
 .home-hero-copy h1 span {
+  display: inline-block;
   margin-left: 0.12em;
   color: #e11d48;
 }
@@ -141,12 +149,12 @@
 
 @media (width <= 768px) {
   .home-hero-panel {
-    height: max(380px, calc(100vh - 360px));
+    min-height: max(380px, calc(100vh - 360px));
   }
 
   .home-hero-content {
     align-items: flex-start;
-    padding: 34px 24px;
+    padding: 34px 24px 64px;
   }
 
   .home-hero-copy > div:last-child {
