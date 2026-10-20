@@ -71,9 +71,9 @@ api.interceptors.response.use(
     return Promise.reject(new ApiBusinessError(code, friendlyMsg))
   },
   (error: AxiosError) => {
+    const body = error.response?.data as Result<unknown> | undefined
     if (error.response?.status === 401) {
       // Token 失效 / 账号被删除或禁用:强制登出回登录页
-      const body = error.response?.data as Result<unknown> | undefined
       const reason = body?.message || '登录已过期，请重新登录'
       console.error('[Auth Error] 强制登出:', reason)
       useUserStore.getState().logout()
@@ -82,9 +82,12 @@ api.interceptors.response.use(
         window.location.href = '/login'
       }
     } else {
-      const friendlyMsg = friendlyErrorMessage(error.message || '网络错误')
+      const friendlyMsg = friendlyErrorMessage(body?.message || error.message || '网络错误')
       console.error('[Network Error]', error.message)
       message.error(friendlyMsg)
+    }
+    if (body && typeof body.code === 'number') {
+      return Promise.reject(new ApiBusinessError(body.code, friendlyErrorMessage(body.message || '操作失败')))
     }
     return Promise.reject(error)
   },

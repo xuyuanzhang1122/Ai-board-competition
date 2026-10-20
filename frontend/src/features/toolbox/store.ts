@@ -13,7 +13,9 @@ export interface PendingSend {
   sessionId: number
 }
 interface ChatState {
+  account: string | null
   activeId: number | null
+  bindAccount: (account: string | null) => void
   cancel: (id: number) => Promise<void>
   clearError: () => void
   ensureSession: (title: string) => Promise<number>
@@ -38,47 +40,95 @@ export function createChatStore(
   uuid: () => string = () => crypto.randomUUID(),
   storage?: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>,
 ) {
-  let initialPending: PendingSend | null = null
+  let account: string | null = null
+  let authEpoch = 0
+  let dataVersion = 0
+  const readPending = (): PendingSend | null => {
+    if (account === null) return null
+    try {
+      const saved = JSON.parse(
+        storage?.getItem(`${pendingKey}:${account}`) || 'null',
+      ) as PendingSend | null
+      return saved?.sessionId && saved.command?.clientRequestId && saved.command.type === 'TEXT'
+        ? saved
+        : null
+    } catch {
+      return null
+    }
+  }
   try {
-    const saved = JSON.parse(storage?.getItem(pendingKey) || 'null') as PendingSend | null
-    if (saved?.sessionId && saved.command?.clientRequestId && saved.command.type === 'TEXT')
-      initialPending = saved
+    storage?.removeItem(pendingKey)
   } catch {
-    /* A damaged retry record must never become a new request. */
+    /* Retire unscoped legacy retry data. */
   }
   let revision = 0
   let creatingSession: Promise<ChatSession> | null = null
   const savePending = (value: PendingSend | null) => {
+    if (account === null) return
     try {
-      if (value) storage?.setItem(pendingKey, JSON.stringify(value))
-      else storage?.removeItem(pendingKey)
+      if (value) storage?.setItem(`${pendingKey}:${account}`, JSON.stringify(value))
+      else storage?.removeItem(`${pendingKey}:${account}`)
     } catch {
       /* Retry remains available in memory. */
     }
   }
   return createStore<ChatState>((set, get) => ({
+    account: null,
+    bindAccount(next) {
+      if (next === account) return
+      account = next
+      ++authEpoch
+      ++revision
+      ++dataVersion
+      creatingSession = null
+      set({
+        account: next,
+        sessions: [],
+        activeId: null,
+        messages: [],
+        loading: false,
+        sending: false,
+        error: null,
+        pending: readPending(),
+      })
+    },
     sessions: [],
     activeId: null,
     messages: [],
     loading: false,
     sending: false,
     error: null,
-    pending: initialPending,
+    pending: null,
     clearError: () => set({ error: null }),
     async list() {
+      const scope = authEpoch
       try {
-        set({ sessions: await client.getSessions() })
+        const sessions = await client.getSessions()
+        if (scope === authEpoch) set({ sessions })
       } catch (error) {
-        set({ error: errorText(error) })
+        if (scope === authEpoch) set({ error: errorText(error) })
       }
     },
     async open(id) {
       const token = ++revision
+      const version = dataVersion
       set({ activeId: id, messages: [], loading: id !== null, error: null })
       if (id === null) return
       try {
         const detail = await client.getSession(id)
-        if (token === revision) set({ messages: detail.messages, loading: false })
+        if (token === revision)
+          set({
+            messages:
+              version === dataVersion
+                ? detail.messages
+                : [
+                    ...detail.messages,
+                    ...get().messages.filter(
+                      (item) => !detail.messages.some((saved) => saved.id === item.id),
+                    ),
+                  ],
+            loading: false,
+          })
       } catch (error) {
         if (token === revision) set({ loading: false, error: errorText(error) })
       }
@@ -86,10 +136,11 @@ export function createChatStore(
     async refresh() {
       const id = get().activeId
       const token = revision
+      const version = dataVersion
       if (id === null || get().loading) return
       try {
         const detail = await client.getSession(id)
-        if (id === get().activeId && token === revision)
+        if (id === get().activeId && token === revision && version === dataVersion)
           set({
             messages: detail.messages,
             error: get().error?.startsWith('更新会话失败') ? null : get().error,
@@ -100,14 +151,16 @@ export function createChatStore(
       }
     },
     async ensureSession(title) {
+      const scope = authEpoch
       if (get().activeId !== null) return get().activeId!
       creatingSession ??= client.createSession({ title: title.slice(0, 40) })
       let session: ChatSession
       try {
         session = await creatingSession
       } finally {
-        creatingSession = null
+        if (scope === authEpoch) creatingSession = null
       }
+      if (scope !== authEpoch) throw new Error('登录账户已变化，请重新发送')
       ++revision
       set({
         activeId: session.id,
@@ -133,14 +186,16 @@ export function createChatStore(
       return get().retry()
     },
     async retry() {
+      const scope = authEpoch
       const pending = get().pending
       if (!pending || get().sending) return false
       set({ sending: true, error: null })
       try {
         const accepted = await client.sendMessage(pending.sessionId, pending.command)
+        if (scope !== authEpoch) return false
         savePending(null)
         if (get().activeId === pending.sessionId) {
-          ++revision
+          ++dataVersion
           const ids = new Set([accepted.userMessage.id, accepted.assistantMessage.id])
           set({
             messages: [
@@ -154,6 +209,7 @@ export function createChatStore(
         void get().list()
         return true
       } catch (error) {
+        if (scope !== authEpoch) return false
         const code =
           error && typeof error === 'object' && 'code' in error ? Number(error.code) : null
         if (
@@ -176,25 +232,30 @@ export function createChatStore(
       }
     },
     async cancel(id) {
+      const scope = authEpoch
+      const sourceId = get().activeId
       try {
         const message = await client.cancelMessage(id)
-        ++revision
+        if (scope !== authEpoch || sourceId !== get().activeId) return
+        ++dataVersion
         set({ messages: get().messages.map((item) => (item.id === message.id ? message : item)) })
       } catch (error) {
-        set({ error: errorText(error) })
+        if (scope === authEpoch) set({ error: errorText(error) })
       }
     },
     async remove(id) {
+      const scope = authEpoch
       if (get().pending?.sessionId === id) {
         set({ error: '请先确认这条消息的受理状态，再删除会话。' })
         return
       }
       try {
         await client.deleteSession(id)
+        if (scope !== authEpoch) return
         set({ sessions: get().sessions.filter((item) => item.id !== id) })
         if (get().activeId === id) await get().open(null)
       } catch (error) {
-        set({ error: errorText(error) })
+        if (scope === authEpoch) set({ error: errorText(error) })
       }
     },
   }))

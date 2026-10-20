@@ -86,10 +86,12 @@ describe('reload and server refresh', () => {
       },
     }
     const first = createChatStore(api, () => 'survives-reload', storage)
+    first.getState().bindAccount('reload-owner')
     await first.getState().open(7)
     api.sendMessage.mockRejectedValueOnce(new Error('closed before acceptance'))
     await first.getState().send('hello', 'catalog-model')
     const reopened = createChatStore(api, () => 'must-not-be-used', storage)
+    reopened.getState().bindAccount('reload-owner')
     expect(reopened.getState().messages).toEqual([])
     expect(reopened.getState().pending?.command.clientRequestId).toBe('survives-reload')
     await reopened.getState().open(7)
@@ -177,5 +179,134 @@ describe('definitive rejection and uncertain acceptance', () => {
     )
     expect(await store.getState().send('hello', 'catalog-model')).toBe(false)
     expect(store.getState().pending?.command.clientRequestId).toBe('one-request-id')
+  })
+})
+
+describe('account boundaries', () => {
+  it('clears account A history and pending and loads account B independently', async () => {
+    const { api, store } = setup()
+    store.getState().bindAccount('A')
+    await store.getState().open(7)
+    api.sendMessage.mockRejectedValueOnce(new Error('network'))
+    await store.getState().send('private A draft', 'catalog-model')
+    store.getState().bindAccount('B')
+    expect(store.getState()).toMatchObject({
+      messages: [],
+      sessions: [],
+      pending: null,
+      activeId: null,
+      sending: false,
+    })
+    await store.getState().open(7)
+    expect(api.getSession).toHaveBeenCalledTimes(2)
+    store.getState().bindAccount(null)
+    expect(store.getState().messages).toEqual([])
+  })
+  it.each(['list', 'open', 'send'] as const)(
+    'ignores account A in-flight %s response after B signs in',
+    async (operation) => {
+      const { api, store } = setup()
+      store.getState().bindAccount('A')
+      await store.getState().open(7)
+      let finish!: (value: unknown) => void
+      const deferred = new Promise((resolve) => {
+        finish = resolve
+      })
+      if (operation === 'list') api.getSessions.mockReturnValueOnce(deferred)
+      if (operation === 'open') api.getSession.mockReturnValueOnce(deferred)
+      if (operation === 'send') api.sendMessage.mockReturnValueOnce(deferred)
+      const running =
+        operation === 'list'
+          ? store.getState().list()
+          : operation === 'open'
+            ? store.getState().open(7)
+            : store.getState().send('A secret', 'catalog-model')
+      store.getState().bindAccount('B')
+      finish(
+        operation === 'list'
+          ? [session]
+          : operation === 'open'
+            ? { session, messages: [message(1, 'USER')] }
+            : {
+                userMessage: message(1, 'USER'),
+                assistantMessage: message(2, 'ASSISTANT'),
+                jobId: 3,
+              },
+      )
+      await running
+      expect(store.getState()).toMatchObject({
+        account: 'B',
+        messages: [],
+        sessions: [],
+        activeId: null,
+        pending: null,
+        sending: false,
+      })
+    },
+  )
+  it('restores pending commands only for the owning account', async () => {
+    const { api } = setup()
+    const records = new Map<string, string>()
+    const storage = {
+      getItem: (key: string) => records.get(key) || null,
+      setItem: (key: string, value: string) => {
+        records.set(key, value)
+      },
+      removeItem: (key: string) => {
+        records.delete(key)
+      },
+    }
+    const store = createChatStore(api, () => 'A-request', storage)
+    store.getState().bindAccount('A')
+    await store.getState().open(7)
+    api.sendMessage.mockRejectedValueOnce(new Error('network'))
+    await store.getState().send('A secret', 'catalog-model')
+    store.getState().bindAccount('B')
+    expect(store.getState().pending).toBeNull()
+    store.getState().bindAccount('A')
+    expect(store.getState().pending?.command.clientRequestId).toBe('A-request')
+    expect([...records.keys()]).toEqual(['competition-toolbox-pending-request:A'])
+  })
+})
+
+describe('task updates during observation', () => {
+  it('does not let an old session cancellation invalidate the new session load', async () => {
+    const { api, store } = setup()
+    await store.getState().open(7)
+    let finishCancel!: (value: unknown) => void
+    let finishOpen!: (value: unknown) => void
+    api.cancelMessage.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishCancel = resolve
+      }),
+    )
+    const cancel = store.getState().cancel(2)
+    api.getSession.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishOpen = resolve
+      }),
+    )
+    const opening = store.getState().open(9)
+    finishCancel({ ...message(2, 'ASSISTANT'), status: 'CANCELED' })
+    await cancel
+    finishOpen({ session: { ...session, id: 9 }, messages: [message(4, 'USER')] })
+    await opening
+    expect(store.getState().loading).toBe(false)
+    expect(store.getState().messages[0]?.id).toBe(4)
+  })
+  it('finishes loading and preserves older history when acceptance arrives during open', async () => {
+    const { api, store } = setup()
+    let finish!: (value: unknown) => void
+    api.getSession.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finish = resolve
+      }),
+    )
+    const opening = store.getState().open(7)
+    await store.getState().send('new turn', 'catalog-model')
+    finish({ session, messages: [message(10, 'USER')] })
+    await opening
+    expect(store.getState().loading).toBe(false)
+    expect(store.getState().messages.map((item) => item.id)).toEqual([10, 1, 2])
   })
 })

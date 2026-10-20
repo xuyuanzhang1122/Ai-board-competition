@@ -1,4 +1,5 @@
 import './toolbox.css'
+import './auth-binding'
 
 import {
   BookOpen,
@@ -19,16 +20,21 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useStore } from 'zustand'
 
 import { modelApi } from '@/features/editor/model-api'
+import { useUserStore } from '@/shared/store/user'
 import type { ModelVO } from '@/shared/types/api'
 
 import type { MessageType } from './api'
 import { ChatComposer } from './components/ChatComposer'
 import { ConversationMessage } from './components/ChatMessage'
+import { getComposerError } from './composer-validation'
 import { applyToolboxTitle } from './page-title'
 import { chatStore, isActiveTask } from './store'
 
 export function ToolboxPage() {
   useEffect(() => applyToolboxTitle(document), [])
+  const account = useUserStore((value) =>
+    value.token && value.userId !== null ? String(value.userId) : null,
+  )
   const state = useStore(chatStore)
   const [params, setParams] = useSearchParams()
   const navigate = useNavigate()
@@ -41,6 +47,8 @@ export function ToolboxPage() {
   const [type, setType] = useState<MessageType>('TEXT')
   const [models, setModels] = useState<ModelVO[]>([])
   const [model, setModel] = useState('')
+  const [modelAccount, setModelAccount] = useState<string | null>(null)
+  const availableModels = modelAccount === account ? models : []
   const [modelError, setModelError] = useState('')
   const [creating, setCreating] = useState(false)
   const [modelReload, setModelReload] = useState(0)
@@ -48,15 +56,24 @@ export function ToolboxPage() {
   const hasMessages = state.messages.length > 0
   const activeTasks = state.messages.some(isActiveTask)
   useEffect(() => {
-    void chatStore.getState().list()
-  }, [])
+    chatStore.getState().bindAccount(account)
+    setContent('')
+    setCreating(false)
+    setSearch('')
+    if (account !== null) void chatStore.getState().list()
+  }, [account])
   useEffect(() => {
     let mounted = true
+    setModels([])
+    setModel('')
+    setModelAccount(null)
+    if (account === null) return
     void modelApi
       .getModels('LANGUAGE')
       .then((items) => {
         if (!mounted) return
         const available = items.filter((item) => item.enabled === 1)
+        setModelAccount(account)
         setModels(available)
         setModel((previous) =>
           available.some((item) => item.code === previous) ? previous : available[0]?.code || '',
@@ -64,13 +81,19 @@ export function ToolboxPage() {
         setModelError('')
       })
       .catch(() => {
-        if (mounted) setModelError('模型列表加载失败，请重试。')
+        if (mounted) {
+          setModels([])
+          setModel('')
+          setModelAccount(null)
+          setModelError('模型列表加载失败，请重试。')
+        }
       })
     return () => {
       mounted = false
     }
-  }, [modelReload])
+  }, [modelReload, account])
   useEffect(() => {
+    if (account === null) return
     if (chatStore.getState().activeId !== sessionId) void chatStore.getState().open(sessionId)
     let stopped = false
     let timer: ReturnType<typeof setTimeout>
@@ -84,7 +107,7 @@ export function ToolboxPage() {
       stopped = true
       clearTimeout(timer)
     }
-  }, [sessionId])
+  }, [sessionId, account])
   const lastMessage = state.messages.at(-1)
   useEffect(() => {
     const element = scrollRef.current
@@ -104,31 +127,42 @@ export function ToolboxPage() {
       activeTasks ||
       !content.trim() ||
       !model ||
-      type !== 'TEXT'
+      type !== 'TEXT' ||
+      account === null ||
+      state.account !== account ||
+      !!modelError ||
+      !!getComposerError(content) ||
+      !availableModels.some((item) => item.code === model)
     )
       return
     const sentContent = content
     setCreating(true)
     try {
       const id = await chatStore.getState().ensureSession(content)
+      if (chatStore.getState().account !== account) return
       setParams({ session: String(id) }, { replace: sessionId === null })
       const accepted = await chatStore.getState().send(content, model)
       if (accepted && chatStore.getState().activeId === id)
         setContent((previous) => (previous === sentContent ? '' : previous))
     } catch (error) {
-      chatStore.setState({ error: error instanceof Error ? error.message : '创建会话失败，请重试' })
+      if (chatStore.getState().account === account)
+        chatStore.setState({
+          error: error instanceof Error ? error.message : '创建会话失败，请重试',
+        })
     } finally {
-      setCreating(false)
+      if (chatStore.getState().account === account) setCreating(false)
     }
   }
   const composer = (
     <ChatComposer
       busy={creating || state.sending}
       content={content}
-      locked={activeTasks || !!state.pending || state.loading}
       model={model}
-      models={models}
+      models={availableModels}
       type={type}
+      locked={
+        activeTasks || !!state.pending || state.loading || !!modelError || state.account !== account
+      }
       onContentChange={setContent}
       onModelChange={setModel}
       onSend={() => void send()}
@@ -253,7 +287,7 @@ export function ToolboxPage() {
                 onClick={() => {
                   if (!pendingHere) chooseSession(state.pending!.sessionId)
                   void state.retry().then((accepted) => {
-                    if (accepted) setContent('')
+                    if (accepted && chatStore.getState().account === account) setContent('')
                   })
                 }}
               >

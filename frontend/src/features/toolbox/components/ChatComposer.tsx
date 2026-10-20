@@ -4,6 +4,7 @@ import { useRef } from 'react'
 import type { ModelVO } from '@/shared/types/api'
 
 import type { MessageType } from '../api'
+import { getComposerError, MAX_CHAT_LENGTH } from '../composer-validation'
 
 interface Props {
   busy: boolean
@@ -31,7 +32,8 @@ export function ChatComposer({
 }: Props) {
   const menuRef = useRef<HTMLDetailsElement>(null)
   const available = type === 'TEXT' && models.some((item) => item.code === model)
-  const disabled = busy || locked || !available || !content.trim()
+  const validationError = getComposerError(content)
+  const disabled = busy || locked || !available || !content.trim() || !!validationError
   return (
     <div className="toolbox-composer-wrap">
       <form
@@ -42,7 +44,9 @@ export function ChatComposer({
         }}
       >
         <textarea
+          aria-invalid={!!validationError}
           aria-label="消息内容"
+          maxLength={MAX_CHAT_LENGTH}
           rows={1}
           value={content}
           placeholder={
@@ -59,6 +63,16 @@ export function ChatComposer({
             if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
               event.preventDefault()
               if (!disabled) onSend()
+            }
+          }}
+          onPaste={(event) => {
+            const input = event.currentTarget
+            const text = event.clipboardData.getData('text')
+            const next =
+              content.slice(0, input.selectionStart) + text + content.slice(input.selectionEnd)
+            if (next.length > MAX_CHAT_LENGTH) {
+              event.preventDefault()
+              onContentChange(next)
             }
           }}
         />
@@ -118,6 +132,11 @@ export function ChatComposer({
           </button>
         </div>
       </form>
+      {validationError && (
+        <p className="toolbox-capability-note" role="alert">
+          {validationError}
+        </p>
+      )}
       {type !== 'TEXT' && (
         <p className="toolbox-capability-note" role="status">
           {type === 'IMAGE' ? '图片' : '视频'}
