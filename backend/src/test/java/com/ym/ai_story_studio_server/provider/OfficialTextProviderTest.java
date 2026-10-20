@@ -104,6 +104,7 @@ class OfficialTextProviderTest {
     @BeforeEach
     void setUp() {
         properties = new TextProviderProperties();
+        properties.setUnlimitedText(false);
         RestClient.Builder builder = RestClient.builder();
         server = MockRestServiceServer.bindTo(builder).build();
         modelAccess = mock(TextModelAccess.class);
@@ -127,6 +128,11 @@ class OfficialTextProviderTest {
 
     @org.junit.jupiter.api.AfterEach
     void clearUser() { UserContext.clear(); }
+
+    @Test
+    void textMonetaryQuotaIsDisabledByDefault() {
+        assertThat(new TextProviderProperties().isUnlimitedText()).isTrue();
+    }
 
     @Test
     void explicitlyUnrestrictedTextIgnoresBudgetAndPriceButStillReturnsUsage() {

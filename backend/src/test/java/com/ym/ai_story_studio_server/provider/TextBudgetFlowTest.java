@@ -49,6 +49,7 @@ class TextBudgetFlowTest {
         budgets.getQuotes().put("deepseek-flash", rate);
         var policy = new TextBudgetPolicy(budgets);
         var properties = new TextProviderProperties();
+        properties.setUnlimitedText(false);
         properties.getDeepseek().setEnabled(true); properties.getDeepseek().setApiKey("test-only-key");
         var builder = RestClient.builder();
         server = MockRestServiceServer.bindTo(builder).build();
