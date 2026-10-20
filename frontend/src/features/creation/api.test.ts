@@ -22,18 +22,26 @@ describe('creation API contract', () => {
     }
     vi.mocked(api.post).mockResolvedValueOnce({ id: 7 })
     await creationApi.generate(12, payload)
-    expect(api.post).toHaveBeenCalledWith('/creation/drafts/12/runs', payload)
+    expect(api.post).toHaveBeenCalledWith('/creation/drafts/12/runs', payload, undefined)
   })
   it('uses revision checks for saving, adopting, and confirming', async () => {
     const payload = { revision: 3, brief: {} as never, script: '稿', storyboard: null }
     await creationApi.save(12, payload)
     await creationApi.adopt(12, 9, 3)
     await creationApi.confirm(12, 4, 'SCRIPT')
-    expect(api.put).toHaveBeenCalledWith('/creation/drafts/12', payload)
-    expect(api.post).toHaveBeenCalledWith('/creation/drafts/12/runs/9/adopt', { revision: 3 })
-    expect(api.post).toHaveBeenCalledWith('/creation/drafts/12/confirm', {
-      revision: 4,
-      stage: 'SCRIPT',
-    })
+    expect(api.put).toHaveBeenCalledWith('/creation/drafts/12', payload, undefined)
+    expect(api.post).toHaveBeenCalledWith(
+      '/creation/drafts/12/runs/9/adopt',
+      { revision: 3 },
+      undefined,
+    )
+    expect(api.post).toHaveBeenCalledWith(
+      '/creation/drafts/12/confirm',
+      {
+        revision: 4,
+        stage: 'SCRIPT',
+      },
+      undefined,
+    )
   })
 })

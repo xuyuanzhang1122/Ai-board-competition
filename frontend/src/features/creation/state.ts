@@ -1,4 +1,4 @@
-import type { Board, Draft, PendingRequest, Run } from './types'
+import type { Board, Body, Draft, PendingRequest, Run } from './types'
 
 /** Never replace an uncertain request with a new UUID or edited input. */
 export const prepareRequest = (pending: PendingRequest | null, next: PendingRequest) =>
@@ -14,7 +14,12 @@ export function settleRequest(pending: PendingRequest, error: unknown): PendingR
     : pending
 }
 export const acceptResponse = (captured: string, current: string) => captured === current
-export const mergePoll = (local: Draft, remote: Draft): Draft => ({ ...local, runs: remote.runs })
+export const mergePoll = (local: Draft, remote: Draft): Draft =>
+  remote.revision >= local.revision ? remote : local
+export const syncDraftList = (drafts: Draft[], draft: Draft) => [
+  draft,
+  ...drafts.filter((entry) => entry.id !== draft.id),
+]
 export const canAdopt = (draft: Draft, run: Run, dirty: boolean) =>
   !dirty && !run.applied && run.status === 'SUCCEEDED' && run.inputRevision === draft.revision
 
@@ -61,4 +66,26 @@ export function parseBoard(raw: string): Board {
 export function createEpochGate() {
   let epoch = 0
   return { next: () => ++epoch, accepts: (value: number) => value === epoch }
+}
+
+interface PollWorkspace {
+  boardJson: string
+  body: Body
+  busy: boolean
+  dirty: boolean
+  draft: Draft | null
+  drafts: Draft[]
+  editRevision: number
+  pending: PendingRequest | null
+}
+export function mergeWorkspacePoll<T extends PollWorkspace>(local: T, remote: Draft): T {
+  const draft = local.draft ? mergePoll(local.draft, remote) : remote
+  const next = { ...local, draft, drafts: syncDraftList(local.drafts, draft) }
+  if (local.dirty || local.pending || local.busy) return next
+  return {
+    ...next,
+    body: draft.body,
+    editRevision: draft.revision,
+    boardJson: draft.body.storyboard ? JSON.stringify(draft.body.storyboard, null, 2) : '',
+  }
 }

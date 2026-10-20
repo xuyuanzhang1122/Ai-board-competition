@@ -52,9 +52,9 @@ function CreationSession({
   const locked = busy || loading || !!pending || (route !== 'new' && !draft)
   const running =
     draft?.runs.some((run) => run.status === 'PENDING' || run.status === 'RUNNING') ?? false
-  const staleEdit = !!draft && dirty && workspace.editRevision !== draft.revision
+  const staleEdit = !!draft && workspace.editRevision !== draft.revision
   const boardStale = body.boardScriptVersion !== body.scriptVersion
-  const saved = !!draft && !dirty && !pending && !busy
+  const saved = !!draft && !dirty && !pending && !busy && !staleEdit
   const ready = saved && body.scriptConfirmed && body.boardConfirmed && !boardStale
   const requestId = () => crypto.randomUUID()
   const changeBody = (patch: Partial<Body>) => workspace.edit({ ...body, ...patch })

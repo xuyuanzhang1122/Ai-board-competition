@@ -2,13 +2,21 @@ import { useEffect, useRef, useState } from 'react'
 import { useBlocker, useNavigate } from 'react-router-dom'
 
 import { modelApi } from '@/features/editor/model-api'
+import { isAccountSessionCurrent } from '@/shared/api/client'
 import { useUserStore } from '@/shared/store/user'
 import type { ModelVO } from '@/shared/types/api'
 
 import { creationApi } from './api'
 import { DEFAULT_BRIEF } from './defaults'
 import { readRecovery, type Recovery, writeRecovery } from './persistence'
-import { acceptResponse, createEpochGate, mergePoll, prepareRequest, settleRequest } from './state'
+import {
+  acceptResponse,
+  createEpochGate,
+  mergeWorkspacePoll,
+  prepareRequest,
+  settleRequest,
+  syncDraftList,
+} from './state'
 import type { Body, Draft, PendingRequest } from './types'
 
 const initialBody = (): Body => ({
@@ -41,6 +49,7 @@ interface Workspace {
 /** Mounted once per account/token/route. All async responses must pass this session's gate. */
 export function useCreationWorkspace(account: number, token: string, route: string) {
   const navigate = useNavigate()
+  const scopedApi = useRef(creationApi.forSession({ token, userId: account })).current
   const [state, setState] = useState<Workspace>(() => ({
     draft: null,
     body: initialBody(),
@@ -69,7 +78,7 @@ export function useCreationWorkspace(account: number, token: string, route: stri
       alive.current && window.location.pathname === pathname
         ? `${useUserStore.getState().userId}:${useUserStore.getState().token}:${route}`
         : 'expired',
-    )
+    ) && isAccountSessionCurrent({ token, userId: account })
   const patch = (change: Partial<Workspace>) => {
     snapshot.current = { ...snapshot.current, ...change }
     setState(snapshot.current)
@@ -86,6 +95,7 @@ export function useCreationWorkspace(account: number, token: string, route: stri
   const applyDraft = (draft: Draft) =>
     patch({
       draft,
+      drafts: syncDraftList(snapshot.current.drafts, draft),
       body: draft.body,
       boardJson: draft.body.storyboard ? JSON.stringify(draft.body.storyboard, null, 2) : '',
       dirty: false,
@@ -154,16 +164,20 @@ export function useCreationWorkspace(account: number, token: string, route: stri
       })
     }
     void Promise.allSettled([
-      creationApi.list(),
+      scopedApi.list(),
       modelApi.getModels('LANGUAGE'),
-      route === 'new' ? Promise.resolve(null) : creationApi.detail(Number(route)),
+      route === 'new' ? Promise.resolve(null) : scopedApi.detail(Number(route)),
     ]).then(([list, models, detail]) => {
       if (!currentLoad()) return
       if (list.status === 'fulfilled') patch({ drafts: list.value })
       if (models.status === 'fulfilled')
         patch({ models: models.value, model: models.value[0]?.code ?? '' })
       if (detail.status === 'fulfilled' && detail.value) {
-        if (recovery?.edit) patch({ draft: detail.value })
+        if (recovery?.edit)
+          patch({
+            draft: detail.value,
+            drafts: syncDraftList(snapshot.current.drafts, detail.value),
+          })
         else applyDraft(detail.value)
       }
       const failures = [list, models, detail].filter((item) => item.status === 'rejected')
@@ -178,12 +192,12 @@ export function useCreationWorkspace(account: number, token: string, route: stri
     })
     const timer = window.setInterval(() => {
       if (route === 'new' || !currentLoad()) return
-      void creationApi
+      void scopedApi
         .detail(Number(route))
         .then((remote) => {
           if (!currentLoad()) return
           const local = snapshot.current.draft
-          if (local) patch({ draft: mergePoll(local, remote) })
+          if (local) patch(mergeWorkspacePoll(snapshot.current, remote))
         })
         .catch(() => {
           /* The next poll retries only the read; never re-sends a generation. */
@@ -221,12 +235,12 @@ export function useCreationWorkspace(account: number, token: string, route: stri
     try {
       let navigateTo: string | null = null
       if (request.kind === 'create') {
-        const draft = await creationApi.create(request.payload)
+        const draft = await scopedApi.create(request.payload)
         if (!isCurrent()) return
         applyDraft(draft)
         navigateTo = `/creation/${draft.id}`
       } else if (request.kind === 'generate') {
-        const run = await creationApi.generate(request.draftId, request.payload)
+        const run = await scopedApi.generate(request.draftId, request.payload)
         if (!isCurrent()) return
         const draft = snapshot.current.draft
         if (draft)
@@ -234,7 +248,7 @@ export function useCreationWorkspace(account: number, token: string, route: stri
             draft: { ...draft, runs: [run, ...draft.runs.filter((entry) => entry.id !== run.id)] },
           })
       } else if (request.kind === 'project') {
-        const result = await creationApi.project(request.draftId, request.payload)
+        const result = await scopedApi.project(request.draftId, request.payload)
         if (!isCurrent()) return
         if (snapshot.current.draft)
           patch({ draft: { ...snapshot.current.draft, projectId: result.projectId } })
@@ -242,10 +256,10 @@ export function useCreationWorkspace(account: number, token: string, route: stri
       } else {
         const draft =
           request.kind === 'save'
-            ? await creationApi.save(request.draftId, request.payload)
+            ? await scopedApi.save(request.draftId, request.payload)
             : request.kind === 'adopt'
-              ? await creationApi.adopt(request.draftId, request.runId, request.payload.revision)
-              : await creationApi.confirm(
+              ? await scopedApi.adopt(request.draftId, request.runId, request.payload.revision)
+              : await scopedApi.confirm(
                   request.draftId,
                   request.payload.revision,
                   request.payload.stage,
@@ -288,7 +302,7 @@ export function useCreationWorkspace(account: number, token: string, route: stri
     patch({ busy: true })
     try {
       const draft = snapshot.current.draft
-      const remote = draft ? await creationApi.detail(draft.id) : null
+      const remote = draft ? await scopedApi.detail(draft.id) : null
       if (!isCurrent()) return
       if (remote) applyDraft(remote)
       else patch({ body: initialBody(), boardJson: '', dirty: false, editRevision: 0 })
@@ -302,10 +316,18 @@ export function useCreationWorkspace(account: number, token: string, route: stri
   }
 
   async function download() {
-    if (!snapshot.current.draft || snapshot.current.busy) return
+    if (
+      !snapshot.current.draft ||
+      snapshot.current.busy ||
+      snapshot.current.pending ||
+      snapshot.current.dirty ||
+      snapshot.current.editRevision !== snapshot.current.draft.revision ||
+      !isCurrent()
+    )
+      return
     patch({ busy: true, error: '' })
     try {
-      const blob = await creationApi.export(snapshot.current.draft.id)
+      const blob = await scopedApi.export(snapshot.current.draft.id)
       if (!isCurrent()) return
       const url = URL.createObjectURL(blob)
       const anchor = document.createElement('a')

@@ -4,7 +4,7 @@ import {
   acceptResponse,
   canAdopt,
   createEpochGate,
-  mergePoll,
+  mergeWorkspacePoll,
   parseBoard,
   prepareRequest,
   settleRequest,
@@ -43,14 +43,72 @@ describe('creation session boundaries', () => {
     expect(acceptResponse('1:tokenA:/creation/1:2', '1:tokenA:/creation/2:3')).toBe(false)
     expect(acceptResponse('same', 'same')).toBe(true)
   })
-  it('polling only refreshes runs and never overwrites an edited body or revision', () => {
+  it('clean polling adopts remote versions, confirmations and project snapshots', () => {
+    const local = {
+      draft,
+      body: draft.body,
+      editRevision: 7,
+      boardJson: '',
+      dirty: false,
+      pending: null,
+      busy: false,
+      drafts: [draft],
+    }
     const remote = {
       ...draft,
       revision: 9,
-      body: { ...draft.body, script: '旧请求结果' },
+      projectId: 30,
+      title: 'remote title',
+      body: { ...draft.body, script: '远端确认稿', scriptConfirmed: true },
       runs: [{ id: 8 }],
     } as Draft
-    expect(mergePoll(draft, remote)).toEqual({ ...draft, runs: remote.runs })
+    const result = mergeWorkspacePoll(local, remote)
+    expect(result.draft).toEqual(remote)
+    expect(result.body).toEqual(remote.body)
+    expect(result.editRevision).toBe(9)
+    expect(result.drafts[0]).toEqual(remote)
+  })
+  it('dirty polling preserves local edits and base revision while exposing remote metadata conflicts', () => {
+    const body = { ...draft.body, script: '未保存的本机人工稿' }
+    const local = {
+      draft,
+      body,
+      editRevision: 7,
+      boardJson: 'local JSON',
+      dirty: true,
+      pending: null,
+      busy: false,
+      drafts: [draft],
+    }
+    const remote = {
+      ...draft,
+      revision: 9,
+      projectId: 30,
+      body: { ...draft.body, script: '远端版本' },
+    } as Draft
+    const result = mergeWorkspacePoll(local, remote)
+    expect(result.body).toEqual(body)
+    expect(result.editRevision).toBe(7)
+    expect(result.boardJson).toBe('local JSON')
+    expect(result.draft?.revision).toBe(9)
+    expect(result.draft?.projectId).toBe(30)
+    expect(result.drafts[0].revision).toBe(9)
+  })
+  it('never replaces pending input or rolls back a newer local mutation with an earlier poll', () => {
+    const local = {
+      draft,
+      body: draft.body,
+      editRevision: 7,
+      boardJson: 'frozen JSON',
+      dirty: false,
+      pending: request,
+      busy: true,
+      drafts: [draft],
+    }
+    const remote = { ...draft, revision: 9, body: { ...draft.body, script: 'remote' } } as Draft
+    expect(mergeWorkspacePoll(local, remote).body).toEqual(draft.body)
+    expect(mergeWorkspacePoll(local, remote).editRevision).toBe(7)
+    expect(mergeWorkspacePoll(local, { ...remote, revision: 6 }).draft?.revision).toBe(7)
   })
   it('rejects stale, invalid, or already applied candidates', () => {
     const run = {
