@@ -122,10 +122,12 @@ public class OfficialTextProvider implements TextGenerationProvider, DisposableB
     public TextGenerationResult generateConversation(List<ChatTurn> messages,String model,Integer maxTokens,
                                                       Double temperature,Double topP) {
         if(messages==null || messages.isEmpty() || messages.size()>200
-                || messages.stream().anyMatch(turn -> turn==null || !Set.of("user","assistant").contains(turn.role()==null?"":turn.role())
+                || messages.stream().anyMatch(turn -> turn==null || !Set.of("system","user","assistant").contains(turn.role()==null?"":turn.role())
                     || turn.content()==null || turn.content().isBlank())
                 || !"user".equals(messages.get(messages.size()-1).role()))
             throw new BusinessException(ResultCode.PARAM_INVALID,"对话上下文格式无效");
+        if(messages.subList(1,messages.size()).stream().anyMatch(turn->"system".equals(turn.role())))
+            throw new BusinessException(ResultCode.PARAM_INVALID,"系统指令只能出现在服务端上下文开头");
         validateRequest(messages.get(messages.size()-1).content(),model,maxTokens,temperature,topP);
         boolean deepseek = isDeepseek(model);
         TextProviderProperties.Endpoint endpoint = deepseek ? properties.getDeepseek() : properties.getMimo();
@@ -171,10 +173,11 @@ public class OfficialTextProvider implements TextGenerationProvider, DisposableB
                     root == null ? null : root.path("id").asText(null), input, output, tokens);
             JsonNode choice = root == null ? null : root.path("choices").path(0);
             if (choice == null || !choice.path("message").path("content").isTextual()
-                    || choice.path("message").path("content").asText().isBlank()
-                    || !"stop".equals(choice.path("finish_reason").asText())) {
+                    || choice.path("message").path("content").asText().isBlank()) {
                 throw new BusinessException(ResultCode.AI_SERVICE_ERROR, "文本供应商未返回完整有效结果");
             }
+            if (!"stop".equals(choice.path("finish_reason").asText()))
+                throw new IncompleteTextException(choice.path("message").path("content").asText(),choice.path("finish_reason").asText("unknown"));
             result = new TextGenerationResult(choice.path("message").path("content").asText(),
                     root.path("model").asText(null), supplier, root.path("id").asText(null), tokens,
                     input, output, reservation == null ? null : reservation.id());

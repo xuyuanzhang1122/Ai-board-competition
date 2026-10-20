@@ -212,6 +212,7 @@ public class AiTextService {
             updateJobSuccess(job, snapshot.model(), snapshot.prompt(), result.text(),
                     result.tokensUsed() == null ? 0 : result.tokensUsed(), result);
         } catch (Exception e) {
+            preserveIncompleteOutput(job,e);
             updateJobFailed(job, e instanceof BusinessException ? e.getMessage() : "文本任务执行失败，请核对任务记录");
         } finally {
             if (previousUser == null) UserContext.clear();
@@ -334,6 +335,7 @@ public class AiTextService {
             );
 
         } catch (BusinessException e) {
+            preserveIncompleteOutput(job,e);
             updateJobFailed(job, e.getMessage());
             throw e;
         } catch (Exception e) {
@@ -424,6 +426,16 @@ public class AiTextService {
      * @param job 任务对象
      * @param errorMessage 错误信息
      */
+    private void preserveIncompleteOutput(Job job,Exception error) {
+        if(error instanceof com.ym.ai_story_studio_server.provider.IncompleteTextException partial) {
+            try {
+                var meta=objectMapper.readValue(job.getMetaJson(),new com.fasterxml.jackson.core.type.TypeReference<Map<String,Object>>() {});
+                meta.put("partialText",partial.getPartialText());meta.put("finishReason",partial.getFinishReason());
+                job.setMetaJson(objectMapper.writeValueAsString(meta));
+            } catch(Exception e) { throw new IllegalStateException("部分文本输出保存失败",e); }
+        }
+    }
+
     private void updateJobFailed(Job job, String errorMessage) {
         job.setStatus("FAILED");
         job.setErrorMessage(errorMessage);

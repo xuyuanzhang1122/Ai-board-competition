@@ -182,6 +182,27 @@ class OfficialTextProviderTest {
     }
 
     @Test
+    void serverInstructionIsKeptAsLeadingSystemRole() {
+        enable(properties.getDeepseek());
+        server.expect(requestTo("https://api.deepseek.com/chat/completions"))
+                .andExpect(jsonPath("$.messages[0].role").value("system"))
+                .andExpect(jsonPath("$.messages[0].content").value("固定剧本规则"))
+                .andExpect(jsonPath("$.messages[1].role").value("user"))
+                .andRespond(withSuccess(success(",\"usage\":{\"prompt_tokens\":5,\"completion_tokens\":3,\"total_tokens\":8}"),MediaType.APPLICATION_JSON));
+        var result=provider.generateConversation(java.util.List.of(new TextGenerationProvider.ChatTurn("system","固定剧本规则"),new TextGenerationProvider.ChatTurn("user","创作需求")),"deepseek-flash",128,0.7,0.9);
+        assertThat(result.text()).isNotBlank();server.verify();
+    }
+
+    @Test
+    void truncatedResponseRetainsPartialTextInTheFailure() {
+        enable(properties.getDeepseek());
+        server.expect(requestTo("https://api.deepseek.com/chat/completions"))
+            .andRespond(withSuccess(success("").replace("stop","length"),MediaType.APPLICATION_JSON));
+        Throwable failure=org.assertj.core.api.Assertions.catchThrowable(()->generate("deepseek-flash"));
+        assertThat(failure).isInstanceOf(BusinessException.class).extracting("partialText").isEqualTo("传说草稿");
+    }
+
+    @Test
     void reservesBeforeHttpAndReturnsDurableCorrelationWithActualUsage() {
         enable(properties.getDeepseek());
         server.expect(requestTo("https://api.deepseek.com/chat/completions"))

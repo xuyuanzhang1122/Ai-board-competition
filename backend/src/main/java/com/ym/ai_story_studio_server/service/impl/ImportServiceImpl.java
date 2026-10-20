@@ -60,6 +60,7 @@ public class ImportServiceImpl implements ImportService {
     private final ProjectSceneMapper projectSceneMapper;
     private final ProjectPropMapper projectPropMapper;
     private final StorageService storageService;
+    private final com.ym.ai_story_studio_server.creation.StoryboardProjectWriter storyboardWriter;
 
     private enum AssetKind {
         CHARACTER, SCENE, PROP, UNKNOWN
@@ -128,7 +129,7 @@ public class ImportServiceImpl implements ImportService {
                 shot.setProjectId(projectId);
                 shot.setShotNo(startShotNo + shotsCreated);
                 shot.setScriptText(scriptText);
-                shotMapper.insert(shot);
+                shot.setId(storyboardWriter.insertShot(projectId, shot.getShotNo(), scriptText, null));
                 shotsCreated++;
 
                 // 角色绑定
