@@ -1,0 +1,15 @@
+ALTER TABLE brainstorm_runs ADD COLUMN max_tools INT NOT NULL DEFAULT 8;
+ALTER TABLE brainstorm_runs ADD COLUMN max_pages INT NOT NULL DEFAULT 5;
+ALTER TABLE brainstorm_runs ADD COLUMN max_repairs INT NOT NULL DEFAULT 2;
+CREATE TABLE brainstorm_events (
+ id BIGINT PRIMARY KEY AUTO_INCREMENT,
+ draft_id BIGINT NOT NULL,
+ user_id BIGINT NOT NULL,
+ revision BIGINT NOT NULL,
+ action VARCHAR(24) NOT NULL,
+ run_id BIGINT NULL,
+ before_json MEDIUMTEXT NULL,
+ after_json MEDIUMTEXT NOT NULL,
+ created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+ FOREIGN KEY(draft_id) REFERENCES brainstorm_drafts(id)
+);

@@ -24,6 +24,7 @@ class BrainstormServiceTest {
         var ds = new DriverManagerDataSource("jdbc:h2:mem:brain"+System.nanoTime()+";MODE=MySQL;DB_CLOSE_DELAY=-1", "sa", "");
         db = new JdbcTemplate(ds);
         for (String sql : Files.readString(Path.of("src/main/resources/db/migration/V41__controlled_brainstorm.sql")).split(";")) if (!sql.isBlank()) db.execute(sql);
+        for (String sql : Files.readString(Path.of("src/main/resources/db/migration/V42__brainstorm_audit_limits.sql")).split(";")) if (!sql.isBlank()) db.execute(sql);
         db.execute("CREATE TABLE jobs(id BIGINT PRIMARY KEY,user_id BIGINT,project_id BIGINT,status VARCHAR(24),meta_json CLOB,error_message CLOB,finished_at TIMESTAMP)");
         text = mock(AiTextService.class); creation = mock(CreationService.class);
         library = mock(WorkbenchLibraryService.class); web=mock(BrainstormWeb.class);
@@ -127,6 +128,43 @@ class BrainstormServiceTest {
         decide(r,json.writeValueAsString(Map.of("tool","finish","arguments",Map.of("outline",new Outline(List.of(cited,direction("b")),"a","选择")))));
         assertThat(service.detail(d.id()).runs().get(0).status()).isEqualTo("SUCCEEDED");
         assertThat(service.export(d.id()).get("sources").toString()).contains("knowledge-4-v2","LEGEND","已审核内容");
+    }
+    @Test void intermediateOutlineCanBeRecoveredAndHumanAuditSurvivesLaterEdits() throws Exception {
+        var d=draft();var r=run(d);var outline=new Outline(List.of(direction("a"),direction("b")),"a","原先选择");
+        decide(r,json.writeValueAsString(Map.of("tool","save_draft","arguments",Map.of("outline",outline))));
+        decide(r,"{\"tool\":\"ask_user\",\"arguments\":{\"question\":\"继续吗\"}}");
+        d=service.adopt(d.id(),r.id(),new Revision(d.revision()));
+        assertThat(d.runs().get(0).applied()).isTrue();
+        d=service.confirm(d.id(),new Revision(d.revision()));
+        service.save(d.id(),new Save(d.revision(),brief,new Outline(outline.directions(),"b","后来修改")));
+        String events=service.export(d.id()).get("events").toString();
+        assertThat(events).contains("CREATE","ADOPT","CONFIRM","EDIT","原先选择","后来修改");
+        var confirmation=db.queryForMap("SELECT before_json,after_json FROM brainstorm_events WHERE draft_id=? AND action='CONFIRM'",d.id());
+        assertThat(json.readTree((String)confirmation.get("before_json")).path("confirmed").asBoolean()).isFalse();
+        assertThat(json.readTree((String)confirmation.get("after_json")).path("confirmed").asBoolean()).isTrue();
+        assertThat(json.readTree((String)confirmation.get("after_json")).path("outline").path("selectionReason").asText()).isEqualTo("原先选择");
+    }
+    @Test void acceptedLimitsAreClampedAndFrozenAcrossConfigurationChanges() throws Exception {
+        org.springframework.test.util.ReflectionTestUtils.setField(service,"maxTools",1);
+        org.springframework.test.util.ReflectionTestUtils.setField(service,"maxPages",500);
+        org.springframework.test.util.ReflectionTestUtils.setField(service,"maxRepairs",-3);
+        var d=draft();var r=run(d);
+        org.springframework.test.util.ReflectionTestUtils.setField(service,"maxTools",8);
+        decide(r,"{\"tool\":\"search_knowledge\",\"arguments\":{\"query\":\"灯塔\"}}");
+        assertThat(service.detail(d.id()).runs().get(0).status()).isEqualTo("NEEDS_REVIEW");
+        var row=db.queryForMap("SELECT max_tools,max_pages,max_repairs FROM brainstorm_runs WHERE id=?",r.id());
+        assertThat(((Number)row.get("max_tools")).intValue()).isEqualTo(1);
+        assertThat(((Number)row.get("max_pages")).intValue()).isEqualTo(5);
+        assertThat(((Number)row.get("max_repairs")).intValue()).isZero();
+    }
+    @Test void failedJobPreservesPartialTextAndUserProvidedSourcesRemainUnreviewed() throws Exception {
+        var supplied=new CreationTypes.Brief(brief.theme(),brief.audience(),brief.channel(),brief.goal(),30,"16:9","用户材料",List.of(new CreationTypes.Source("user-1","用户来源","https://example.com","待核")));
+        var d=service.create(new Create(UUID.randomUUID().toString(),supplied));var r=run(d);
+        String snapshot=db.queryForObject("SELECT sources_json FROM brainstorm_runs WHERE id=?",String.class,r.id());
+        assertThat(snapshot).contains("user-1","UNREVIEWED");
+        db.update("UPDATE jobs SET status='FAILED',meta_json=?",json.writeValueAsString(Map.of("text","","partialText","截断结果")));
+        service.synchronizeResults();
+        assertThat(service.detail(d.id()).runs().get(0).steps().get(0).result().toString()).contains("截断结果");
     }
     Direction direction(String id) {return new Direction(id,"标题","角度","信息",List.of("情节"),"情绪","行动",List.of(),List.of("纯虚构"));}
 }

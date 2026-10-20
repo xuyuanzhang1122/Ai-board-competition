@@ -13,7 +13,7 @@ public final class BrainstormTypes {
     public record Outline(List<Direction> directions, String selectedId, String selectionReason) {}
     public record Step(long id, String tool, String status, String inputSummary, JsonNode result, String createdAt) {}
     public record Run(long id, String status, long inputRevision, String model, int promptVersion,
-                      String error, Outline output, List<Step> steps) {}
+                      String error, Outline output, boolean applied, List<Step> steps) {}
     public record Draft(long id, long revision, Brief brief, Outline outline, boolean confirmed, Long creationDraftId, List<Run> runs) {}
     public record Create(String requestId, Brief brief) {}
     public record Save(@JsonDeserialize(using=StrictNumbers.LongValue.class) long revision, Brief brief, Outline outline) {}
