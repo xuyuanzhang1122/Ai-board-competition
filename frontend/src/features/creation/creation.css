@@ -1,0 +1,328 @@
+.creation-page {
+  max-width: 1480px;
+  margin: 0 auto;
+  color: #273348;
+}
+.creation-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  margin: 6px 0 26px;
+}
+.creation-header h1 {
+  margin: 8px 0;
+  font-size: 28px;
+  font-weight: 750;
+  letter-spacing: -0.03em;
+}
+.creation-header p {
+  font-size: 13px;
+  color: #717b8b;
+}
+.creation-eyebrow {
+  font-size: 11px !important;
+  color: #c1616a !important;
+}
+.creation-layout {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 22px;
+  align-items: start;
+}
+.creation-card {
+  border: 1px solid #ece9e8;
+  border-radius: 20px;
+  background: #fff;
+  padding: 22px;
+  box-shadow: 0 6px 24px #49342204;
+}
+.creation-card h2 {
+  margin: 0 0 14px;
+  font-size: 16px;
+  font-weight: 700;
+}
+.creation-sidebar {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 80vh;
+  overflow: auto;
+  padding: 16px;
+}
+.creation-page button {
+  border: 1px solid #e4dce0;
+  border-radius: 9px;
+  padding: 8px 13px;
+  font-size: 13px;
+  font-weight: 550;
+  background: #fff;
+  cursor: pointer;
+}
+.creation-page button:hover:not(:disabled) {
+  border-color: #ed8998;
+  background: #fff4f4;
+}
+.creation-page button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+.creation-page button:focus-visible,
+.creation-page input:focus-visible,
+.creation-page textarea:focus-visible,
+.creation-page select:focus-visible,
+.creation-page summary:focus-visible {
+  outline: 2px solid #e96d85;
+  outline-offset: 3px;
+}
+.creation-page .creation-primary {
+  color: white;
+  border-color: #dc667e;
+  background: #dc667e;
+}
+.creation-page .creation-primary:hover:not(:disabled) {
+  color: #91364c;
+}
+.creation-page .creation-draft-link {
+  text-align: left;
+  padding: 12px;
+}
+.creation-draft-link strong {
+  display: block;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.creation-draft-link span {
+  display: block;
+  color: #89909e;
+  font-size: 11px;
+  margin-top: 6px;
+}
+.creation-page .creation-draft-link[aria-current='page'] {
+  border-color: #efb3bf;
+  background: #fff1f3;
+}
+.creation-workspace,
+.creation-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.creation-toolbar,
+.creation-section-heading,
+.creation-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.creation-toolbar .creation-field {
+  flex: 1;
+  min-width: 220px;
+}
+.creation-toolbar .creation-actions {
+  flex: 1;
+  justify-content: flex-end;
+}
+.creation-section-heading h2 {
+  margin: 0;
+}
+.creation-actions {
+  justify-content: flex-start;
+}
+.creation-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 550;
+  color: #566177;
+}
+.creation-field textarea,
+.creation-field input,
+.creation-field select {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #dedfe5;
+  border-radius: 9px;
+  background: #fcfcfd;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 400;
+  color: #273348;
+  line-height: 1.6;
+}
+.creation-field textarea {
+  resize: vertical;
+}
+.creation-field select[multiple] {
+  min-height: 90px;
+}
+.creation-field input:disabled,
+.creation-field textarea:disabled,
+.creation-field select:disabled {
+  opacity: 0.65;
+}
+.creation-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 14px;
+}
+.creation-hint {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.8;
+  color: #838896;
+  margin: 0;
+}
+.creation-notice {
+  padding: 14px 16px;
+  border: 1px solid #f1d9b6;
+  border-radius: 12px;
+  background: #fffbf1;
+  color: #85602e;
+  font-size: 12px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.creation-notice button {
+  margin-top: 8px;
+}
+.creation-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.creation-tabs button {
+  flex: 1;
+  padding: 12px;
+}
+.creation-tabs [aria-selected='true'] {
+  color: #ae4561;
+  border-color: #f1c3cc;
+  background: #fff1f4;
+}
+.creation-editor {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.creation-editor-footer {
+  border-top: 1px solid #eee;
+  margin-top: 20px;
+  padding-top: 16px;
+}
+.creation-subcard,
+.creation-run {
+  padding: 16px;
+  border: 1px solid #e8e8ee;
+  border-radius: 12px;
+  min-width: 0;
+}
+.creation-subcard legend {
+  font-size: 12px;
+  padding: 0 6px;
+  color: #8a7580;
+}
+.creation-subcard .creation-field + .creation-field {
+  margin-top: 8px;
+}
+.creation-run {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.creation-run strong {
+  font-size: 13px;
+}
+.creation-page details {
+  min-width: 0;
+}
+.creation-page summary {
+  cursor: pointer;
+  padding: 7px 0;
+  font-size: 12px;
+  color: #9d596e;
+}
+.creation-page details > .creation-stack {
+  margin-top: 10px;
+}
+.creation-page pre,
+.creation-code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  line-height: 1.75;
+}
+.creation-page pre {
+  padding: 14px;
+  background: #f7f7f9;
+  border-radius: 9px;
+  max-height: 500px;
+  overflow: auto;
+}
+.creation-empty {
+  color: #9696a2;
+  text-align: center;
+  padding: 32px 12px;
+  font-size: 13px;
+}
+.creation-wait {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 20px;
+}
+.creation-wait i {
+  width: 6px;
+  height: 6px;
+  background: #e47c93;
+  border-radius: 50%;
+  animation: creation-breathe 1.3s ease-in-out infinite;
+}
+.creation-wait i:nth-child(2) {
+  animation-delay: 0.16s;
+}
+.creation-wait i:nth-child(3) {
+  animation-delay: 0.32s;
+}
+@keyframes creation-breathe {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+    transform: scale(0.7);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+@media (width <= 900px) {
+  .creation-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .creation-sidebar {
+    position: static;
+    max-height: 220px;
+  }
+  .creation-header {
+    align-items: flex-start;
+  }
+  .creation-card {
+    padding: 16px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .creation-wait i {
+    animation: none;
+    opacity: 0.65;
+  }
+}

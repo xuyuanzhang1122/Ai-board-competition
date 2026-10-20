@@ -33,6 +33,13 @@ export const router = createBrowserRouter([
               return { Component: HomePage }
             },
           },
+          {
+            path: 'creation/:id?',
+            lazy: async () => {
+              const { CreationPage } = await import('@/features/creation/CreationPage')
+              return { Component: CreationPage }
+            },
+          },
           { path: 'wallet', element: <Navigate replace to="/home" /> },
           { path: 'recharge', element: <Navigate replace to="/home" /> },
           { path: 'invite', element: <Placeholder phase="Phase 1" title="邀请" /> },
