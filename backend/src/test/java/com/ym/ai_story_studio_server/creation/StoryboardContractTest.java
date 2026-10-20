@@ -14,6 +14,24 @@ class StoryboardContractTest {
         {"id":"shot2","no":2,"duration":15,"visual":"灯塔照向夜空","narration":"回应远方","dialogue":"","shotSize":"远景","cameraMovement":"拉远","characters":["c1"],"scene":"s1","props":[],"imagePrompt":"海边灯塔","videoPrompt":"镜头拉远","sourceIds":[]}],"reviewNotes":["纯虚构故事，不作史实陈述"]}
         """;
     final StoryboardContract contract = new StoryboardContract(new ObjectMapper());
+    @Test void competitionBriefDoesNotRequireAnAudienceChannelOrMarketingGoal() {
+        for (String value : new String[]{"", null}) {
+            var brief = new CreationTypes.Brief("八仙过海：民间传说改编", value, value, value,
+                30, "16:9", "传说演绎", java.util.List.of());
+            assertThatCode(() -> contract.validateBrief(brief)).doesNotThrowAnyException();
+        }
+    }
+    @Test void optionalBriefSettingsStillHaveLengthLimits() {
+        for (var settings : new String[][]{
+            {"人".repeat(201), "", "", "受众"},
+            {"", "渠".repeat(101), "", "渠道"},
+            {"", "", "目".repeat(501), "创作目标"}
+        }) {
+            var brief = new CreationTypes.Brief("蓬莱故事", settings[0], settings[1], settings[2],
+                30, "16:9", "", java.util.List.of());
+            assertThatThrownBy(() -> contract.validateBrief(brief)).hasMessageContaining(settings[3]);
+        }
+    }
     @Test void acceptsStrictStableIdsAndAnExplicitlyFictionalPackage() {
         var board=contract.parse(BOARD,30,java.util.Set.of());
         assertThat(board.shots()).hasSize(2);

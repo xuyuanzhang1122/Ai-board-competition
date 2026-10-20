@@ -52,8 +52,8 @@ public class StoryboardContract {
         require(target>=15 && target<=90 && Math.abs(total-target)<=target*0.1,"镜头总时长须在目标时长的10%以内");
     }
     public void validateBrief(Brief b) {
-        require(b!=null,"创作简报必填"); text(b.theme(),500,"创作主题");text(b.audience(),200,"受众");
-        text(b.channel(),100,"渠道");text(b.goal(),500,"传播目标");
+        require(b!=null,"创作简报必填"); text(b.theme(),500,"创作主题");optional(b.audience(),200,"受众");
+        optional(b.channel(),100,"渠道");optional(b.goal(),500,"创作目标");
         require(b.duration()>=15 && b.duration()<=90,"目标时长须为15至90秒");
         require(Set.of("16:9","9:16","1:1","21:9").contains(b.aspectRatio()==null?"":b.aspectRatio()),"画幅无效");
         optional(b.materials(),12000,"参考资料");require(b.sources()!=null && b.sources().size()<=20,"来源数量无效");

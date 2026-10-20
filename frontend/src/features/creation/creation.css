@@ -173,6 +173,32 @@
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 14px;
 }
+.creation-topics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+.creation-page .creation-topic {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 16px;
+  text-align: left;
+}
+.creation-topic span {
+  color: #ad596c;
+  font-size: 11px;
+}
+.creation-topic strong {
+  font-size: 14px;
+}
+.creation-topic small {
+  color: #717b8b;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.7;
+}
 .creation-hint {
   font-size: 12px;
   font-weight: 400;

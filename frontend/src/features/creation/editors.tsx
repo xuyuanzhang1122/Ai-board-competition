@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 
+import { briefFromTopic, STORY_TOPICS } from './topics'
 import type { Board, Brief, Shot } from './types'
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -27,7 +28,7 @@ export function BriefEditor({
       <textarea
         maxLength={max}
         rows={key === 'materials' ? 4 : 2}
-        value={brief[key]}
+        value={brief[key] ?? ''}
         onChange={(event) => onChange({ ...brief, [key]: event.target.value })}
       />
     </Field>
@@ -35,14 +36,24 @@ export function BriefEditor({
   return (
     <div className="creation-stack">
       <p className="creation-hint">
-        默认案例为纯虚构创意。来源由创作者填写，未经审核；涉及事实和授权时请自行核对并记录。
+        选一个烟台故事，开始创作参赛短片，也可以直接改写主题。传说按传说讲述，历史故事可以作艺术演绎。
       </p>
-      {text('theme', '创作主题', 500)}
-      <div className="creation-grid">
-        {text('audience', '受众', 200)}
-        {text('channel', '传播渠道', 100)}
+      <div aria-label="烟台故事题材" className="creation-topics">
+        {STORY_TOPICS.map((topic) => (
+          <button
+            aria-label={`使用题材：${topic.title}`}
+            className="creation-topic"
+            key={topic.id}
+            type="button"
+            onClick={() => onChange(briefFromTopic(topic))}
+          >
+            <span>{topic.kind}</span>
+            <strong>{topic.title}</strong>
+            <small>{topic.summary}</small>
+          </button>
+        ))}
       </div>
-      {text('goal', '传播目标', 500)}
+      {text('theme', '创作主题', 500)}
       <div className="creation-grid">
         <Field label="目标时长（15–90 秒）">
           <input
@@ -65,6 +76,16 @@ export function BriefEditor({
         </Field>
       </div>
       {text('materials', '参考资料与创意说明', 12000)}
+      <details>
+        <summary>补充设置（选填）</summary>
+        <div className="creation-stack">
+          <div className="creation-grid">
+            {text('audience', '观看对象（选填）', 200)}
+            {text('channel', '展示渠道（选填）', 100)}
+          </div>
+          {text('goal', '想怎么讲（选填）', 500)}
+        </div>
+      </details>
       <details>
         <summary>来源与授权记录（{brief.sources.length}）</summary>
         <div className="creation-stack">
