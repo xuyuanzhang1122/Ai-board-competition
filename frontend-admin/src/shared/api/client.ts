@@ -17,6 +17,10 @@ export const api: AxiosInstance = axios.create({
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     const token = localStorage.getItem(TOKEN_KEY)
+    const authorization = config.headers?.get('Authorization')
+    if (authorization && authorization !== `Bearer ${token}`) {
+      return Promise.reject(new Error('登录状态已改变，请重新打开页面'))
+    }
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`
     }
@@ -36,7 +40,10 @@ api.interceptors.response.use(
   (error: AxiosError) => {
     const body = error.response?.data as Result<unknown> | undefined
 
-    if (error.response?.status === 401) {
+    if (
+      error.response?.status === 401 &&
+      error.config?.headers.get('Authorization') === `Bearer ${localStorage.getItem(TOKEN_KEY)}`
+    ) {
       localStorage.removeItem(TOKEN_KEY)
       if (window.location.pathname !== '/login') {
         window.location.href = '/login'

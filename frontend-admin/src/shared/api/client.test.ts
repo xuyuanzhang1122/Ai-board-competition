@@ -89,3 +89,43 @@ describe('admin API client', () => {
     expect(window.location.href).toBe('/login')
   })
 })
+
+it('stale unauthorized response does not clear the new admin session', async () => {
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: localStorageMock })
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { location: { href: '/knowledge', pathname: '/knowledge' } },
+  })
+  storage.set(TOKEN_KEY, 'old-admin')
+  api.defaults.adapter = async (config) => {
+    storage.set(TOKEN_KEY, 'new-admin')
+    throw new AxiosError('Unauthorized', AxiosError.ERR_BAD_REQUEST, config, undefined, {
+      config,
+      data: { code: 401, message: '过期' },
+      headers: new AxiosHeaders(),
+      status: 401,
+      statusText: 'Unauthorized',
+    })
+  }
+  try {
+    await expect(api.get('/admin/workbench/knowledge')).rejects.toThrow()
+    expect(storage.get(TOKEN_KEY)).toBe('new-admin')
+    expect(window.location.href).toBe('/knowledge')
+  } finally {
+    api.defaults.adapter = originalAdapter
+  }
+})
+
+it('does not send a captured session token after the admin account changed', async () => {
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: localStorageMock })
+  storage.set(TOKEN_KEY, 'new-admin')
+  let sent = false
+  api.defaults.adapter = async config => {
+    sent = true
+    return { config, data: { code: 200, data: [], message: '' }, headers: new AxiosHeaders(), status: 200, statusText: 'OK' }
+  }
+  try {
+    await expect(api.get('/admin/workbench/prompts', { headers: { Authorization: 'Bearer old-admin' } })).rejects.toThrow('登录状态已改变')
+    expect(sent).toBe(false)
+  } finally { api.defaults.adapter = originalAdapter }
+})

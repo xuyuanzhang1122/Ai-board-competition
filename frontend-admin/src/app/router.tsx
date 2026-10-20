@@ -5,6 +5,8 @@ import { RedirectIfAuthed, RequireAuth } from '@/app/RouteGuards'
 import { AdminLogin } from '@/features/auth/AdminLogin'
 import { ModelConfig } from '@/features/models/ModelConfig'
 import { UserManage } from '@/features/users/UserManage'
+import { KnowledgeManage } from '@/features/workbench/KnowledgeManage'
+import { PromptManage } from '@/features/workbench/PromptManage'
 
 export const router = createBrowserRouter([
   {
@@ -20,6 +22,8 @@ export const router = createBrowserRouter([
           { index: true, element: <Navigate replace to="/users" /> },
           { path: '/users', element: <UserManage /> },
           { path: '/models', element: <ModelConfig /> },
+          { path: '/knowledge', element: <KnowledgeManage /> },
+          { path: '/prompts', element: <PromptManage /> },
         ],
       },
     ],

@@ -1,6 +1,6 @@
 import type { MenuItemType } from '@lobehub/ui'
 import { Button, Layout, Menu } from '@lobehub/ui'
-import { LogOut, Sparkles, UsersRound } from 'lucide-react'
+import { BookOpen, FileText, LogOut, Sparkles, UsersRound } from 'lucide-react'
 import { useEffect } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 
@@ -10,6 +10,8 @@ import { useAuthStore } from '@/shared/store/auth'
 const NAV_ITEMS: MenuItemType[] = [
   { icon: UsersRound, key: '/users', label: '用户管理' },
   { icon: Sparkles, key: '/models', label: '模型配置' },
+  { icon: BookOpen, key: '/knowledge', label: '知识审核' },
+  { icon: FileText, key: '/prompts', label: '提示词版本' },
 ]
 
 export function AdminShell() {
