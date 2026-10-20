@@ -33,9 +33,11 @@ Base `/api/toolbox/chat` (authenticated current user).
 
 ## Tasks
 
-- [ ] A (primary): complete official dynamic catalog, unrestricted text audit, model sync/admin-write concurrency safeguards; tests; immutable JAR deployment and official live checks.
-- [ ] B (backend implementer): new durable chat controller/service/schema and server worker; ownership/idempotency/context/pending recovery tests; no paid test calls or runtime restarts; commit only owned backend files.
-- [ ] C (frontend implementer): rebuild toolbox route/page/components/state around shared contract and supplied screenshots; proper responsive layout, session restoration, real task cards and disabled unimplemented media capability; tests/typecheck/build; remove obsolete chat components that are no longer used; commit only owned frontend files.
-- [ ] D (primary + reviewers): verify spec and quality of B/C, integrate any necessary provider conversation support, run full suites and browser checks (empty state, real conversation, switching/reload and browser close/reopen during an accepted task), compare screenshots, verify media cannot call suppliers, update acceptance docs and commit.
+- [x] A (primary): complete official dynamic catalog, unrestricted text audit, model sync/admin-write concurrency safeguards; tests; immutable JAR deployment and official live checks.
+- [x] B (backend implementer): new durable chat controller/service/schema and server worker; ownership/idempotency/context/pending recovery tests; no paid test calls or runtime restarts; commit only owned backend files.
+- [x] C (frontend implementer): rebuild toolbox route/page/components/state around shared contract and supplied screenshots; proper responsive layout, session restoration, real task cards and disabled unimplemented media capability; tests/typecheck/build; remove obsolete chat components that are no longer used; commit only owned frontend files.
+- [x] D (primary + reviewers): verify spec and quality of B/C, integrate any necessary provider conversation support, run full suites and browser checks (empty state, real conversation, switching/reload and browser close/reopen during an accepted task), compare screenshots, verify media cannot call suppliers, update acceptance docs and commit.
 
 Use independent source-file ownership to avoid cross-agent edits. Primary owns OfficialTextProvider/OfficialModelCatalog/registry/budget and admin UI; backend implementer owns new chat files and AiTextService/TextTaskSnapshot/TextGenerationProvider; frontend implementer owns toolbox and route/layout files but not shared model constants or admin files.
+
+2026-10-20 验证完成，具体结果和未开放能力见 `docs/competition/工具箱重构与动态模型验收记录.md`。
