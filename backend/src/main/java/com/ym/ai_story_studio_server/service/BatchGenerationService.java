@@ -120,6 +120,7 @@ public class BatchGenerationService {
     private final VideoGenerationProvider videoProvider;
     private final AiProperties aiProperties;
     private final AiTextService aiTextService;
+    private final com.ym.ai_story_studio_server.workbench.WorkbenchLibraryService library;
 
     /**
      * 批量生成分镜图
@@ -609,7 +610,9 @@ public class BatchGenerationService {
         Project project = validateProjectAccess(userId, projectId);
 
         // 2. 创建Job任务
-        Job job = aiTextService.createQueuedParsingJob(userId, projectId, request.rawText());
+        var parser = library.published("SHOT_PARSE");
+        String prompt = parser.content() + "\n\n用户文案：\n" + request.rawText();
+        Job job = aiTextService.createQueuedParsingJob(userId, projectId, prompt);
         log.info("文本解析任务已创建 - jobId: {}", job.getId());
 
         // 3. 发送MQ消息执行文本解析

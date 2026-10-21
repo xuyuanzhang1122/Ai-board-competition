@@ -22,7 +22,8 @@ public class CreationService {
     private final ObjectMapper json;
     private final StoryboardContract contract;
     private final StoryboardProjectWriter projects;
-    public CreationService(JdbcTemplate db,TransactionTemplate tx,AiTextService text,ObjectMapper json,StoryboardContract contract,StoryboardProjectWriter projects){this.db=db;this.tx=tx;this.text=text;this.json=json;this.contract=contract;this.projects=projects;}
+    private final com.ym.ai_story_studio_server.workbench.WorkbenchLibraryService library;
+    public CreationService(JdbcTemplate db,TransactionTemplate tx,AiTextService text,ObjectMapper json,StoryboardContract contract,StoryboardProjectWriter projects,com.ym.ai_story_studio_server.workbench.WorkbenchLibraryService library){this.db=db;this.tx=tx;this.text=text;this.json=json;this.contract=contract;this.projects=projects;this.library=library;}
     private long user(){Long u=UserContext.getUserId();if(u==null)throw new BusinessException(ResultCode.UNAUTHORIZED);return u;}
     public List<Draft> list(){return db.query("SELECT * FROM creation_drafts WHERE user_id=? ORDER BY updated_at DESC,id DESC LIMIT 100",(r,n)->draft(r.getLong("id"),r.getLong("revision"),r.getString("title"),r.getString("body_json"),r.getObject("project_id",Long.class)),user());}
     private Draft draft(long id,long revision,String title,String body,Long project){return new Draft(id,revision,title,decode(body,Body.class),project,runs(id));}
@@ -83,8 +84,8 @@ public class CreationService {
         revision(d,request.revision());require(Set.of("SCRIPT","STORYBOARD").contains(request.stage()==null?"":request.stage()),"阶段无效");
         require(d.runs().stream().noneMatch(r->Set.of("PENDING","RUNNING").contains(r.status())),"已有生成任务执行中");
         if("STORYBOARD".equals(request.stage()))require(d.body().scriptConfirmed(),"请先保存并确认剧本");
-        var prompt=db.queryForMap("SELECT version,content FROM creation_prompts WHERE stage=? ORDER BY version DESC LIMIT 1",request.stage());
-        int version=((Number)prompt.get("version")).intValue();String instruction=(String)prompt.get("content");
+        var prompt=library.published(request.stage());
+        int version=prompt.version();String instruction=prompt.content();
         String input=encode(Map.of("brief",d.body().brief(),"confirmedScript","STORYBOARD".equals(request.stage())?d.body().script():""));
         var job=text.createQueuedConversationJob(user(),request.model(),List.of(new ChatTurn("system",instruction),new ChatTurn("user",input)));
         long run=JdbcIds.insert(db,"INSERT INTO creation_runs(draft_id,request_id,stage,input_revision,model,job_id,prompt_version,input_json) VALUES(?,?,?,?,?,?,?,?)",id,request.requestId(),request.stage(),d.revision(),request.model(),job.getId(),version,input);

@@ -24,13 +24,14 @@ class CreationServiceTest {
         String ddl=Files.readString(Path.of("src/main/resources/db/migration/V39__text_creation_pipeline.sql"));
         db.execute("CREATE TABLE storyboard_shots(id BIGINT AUTO_INCREMENT PRIMARY KEY,project_id BIGINT,shot_no INT,script_text CLOB)");
         for(String statement:ddl.split(";"))if(!statement.isBlank())db.execute(statement);
+        for(String statement:Files.readString(Path.of("src/main/resources/db/migration/V40__workbench_library.sql")).split(";"))if(!statement.isBlank())db.execute(statement);
         db.execute("CREATE TABLE jobs(id BIGINT PRIMARY KEY,user_id BIGINT,project_id BIGINT,status VARCHAR(20),meta_json CLOB,error_message CLOB,finished_at TIMESTAMP)");
         db.execute("CREATE TABLE projects(id BIGINT AUTO_INCREMENT PRIMARY KEY,user_id BIGINT,name VARCHAR(128),aspect_ratio VARCHAR(16),style_code VARCHAR(64),raw_text CLOB,status VARCHAR(32),model_config_json CLOB,deleted_at TIMESTAMP)");
         for(String table:List.of("project_characters","project_scenes","project_props")) db.execute("CREATE TABLE "+table+"(id BIGINT AUTO_INCREMENT PRIMARY KEY,project_id BIGINT,display_name VARCHAR(64),override_description CLOB)");
         db.execute("CREATE TABLE shot_bindings(id BIGINT AUTO_INCREMENT PRIMARY KEY,shot_id BIGINT,bind_type VARCHAR(16),bind_id BIGINT)");
         text=mock(AiTextService.class);var next=new java.util.concurrent.atomic.AtomicLong(100);
         when(text.createQueuedConversationJob(anyLong(),anyString(),anyList())).thenAnswer(i->{Job j=new Job();j.setId(next.getAndIncrement());db.update("INSERT INTO jobs(id,user_id,project_id,status,meta_json) VALUES(?,?,0,'PENDING','{}')",j.getId(),i.<Long>getArgument(0));return j;});
-        service=new CreationService(db,new TransactionTemplate(new DataSourceTransactionManager(ds)),text,json,new StoryboardContract(json),new StoryboardProjectWriter(db,json));
+        service=new CreationService(db,new TransactionTemplate(new DataSourceTransactionManager(ds)),text,json,new StoryboardContract(json),new StoryboardProjectWriter(db,json),new com.ym.ai_story_studio_server.workbench.WorkbenchLibraryService(db,new TransactionTemplate(new DataSourceTransactionManager(ds))));
         UserContext.setUserId(1L);
     }
     @AfterEach void clear(){UserContext.clear();}
@@ -108,6 +109,28 @@ class CreationServiceTest {
         assertThat(edited.body().storyboard()).isEqualTo(d.body().storyboard());
         assertThat(edited.body().boardConfirmed()).isFalse();
         assertThat(edited.body().boardScriptVersion()).isNotEqualTo(edited.body().scriptVersion());
+    }
+    @Test void creationUsesPublishedPromptAndRetainsAcceptedInstructionAfterPublication() throws Exception {
+        var d=create();var first=generate(d,"SCRIPT","old-prompt");
+        @SuppressWarnings("unchecked")
+        var captured=org.mockito.ArgumentCaptor.forClass(List.class);
+        verify(text).createQueuedConversationJob(eq(1L),anyString(),captured.capture());
+        String instruction=((com.ym.ai_story_studio_server.provider.TextGenerationProvider.ChatTurn)captured.getValue().get(0)).content();
+        var library=new com.ym.ai_story_studio_server.workbench.WorkbenchLibraryService(db,new TransactionTemplate(new DataSourceTransactionManager(db.getDataSource())));
+        com.ym.ai_story_studio_server.util.AdminContext.setAdminId(9L);
+        try {
+            var replacement=library.createPrompt(new com.ym.ai_story_studio_server.workbench.WorkbenchLibraryService.PromptCreate("SCRIPT","新版剧本规则","brief","TEXT","调整规则"));
+            library.changePromptStatus("SCRIPT",replacement.version(),new com.ym.ai_story_studio_server.workbench.WorkbenchLibraryService.PromptStatus("PUBLISHED",1));
+            assertThat(((com.ym.ai_story_studio_server.provider.TextGenerationProvider.ChatTurn)captured.getValue().get(0)).content()).isEqualTo(instruction);
+            assertThat(first.promptVersion()).isEqualTo(1);
+            finish(first,"旧任务完成");
+            var next=generate(d,"SCRIPT","new-prompt");
+            assertThat(next.promptVersion()).isEqualTo(replacement.version());
+            verify(text).createQueuedConversationJob(eq(1L),anyString(),eq(List.of(new com.ym.ai_story_studio_server.provider.TextGenerationProvider.ChatTurn("system","新版剧本规则"),new com.ym.ai_story_studio_server.provider.TextGenerationProvider.ChatTurn("user",json.writeValueAsString(Map.of("brief",brief,"confirmedScript",""))))));
+            finish(next,"新任务完成");
+            library.changePromptStatus("SCRIPT",replacement.version(),new com.ym.ai_story_studio_server.workbench.WorkbenchLibraryService.PromptStatus("DISABLED",replacement.version()));
+            assertThatThrownBy(()->generate(d,"SCRIPT","disabled-prompt")).hasMessageContaining("禁用");
+        } finally {com.ym.ai_story_studio_server.util.AdminContext.clear();}
     }
     @Test void restartDoesNotResendUncertainCallsAndKeepsQueuedWork() {
         var d=create();var run=generate(d,"SCRIPT","script-1");service.reconcileInterruptedJobs();assertThat(service.pendingJobs()).hasSize(1);

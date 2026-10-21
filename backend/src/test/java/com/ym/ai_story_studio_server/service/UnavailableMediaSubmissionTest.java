@@ -51,7 +51,7 @@ class UnavailableMediaSubmissionTest {
         var service = new BatchGenerationService(mq, jobs, mock(JobItemMapper.class), mock(ProjectMapper.class),
                 mock(StoryboardShotMapper.class), mock(ProjectCharacterMapper.class), mock(ProjectSceneMapper.class),
                 mock(ProjectPropMapper.class), mock(SceneLibraryMapper.class), mock(ShotBindingMapper.class),
-                new ObjectMapper(), provider, provider, new AiProperties(), mock(AiTextService.class));
+                new ObjectMapper(), provider, provider, new AiProperties(), mock(AiTextService.class), mock(com.ym.ai_story_studio_server.workbench.WorkbenchLibraryService.class));
         var request = new BatchGenerateRequest(List.of(1L), "ALL", 1, "16:9", "old-model");
         assertThatThrownBy(() -> service.generateCharactersBatch(1L, request))
                 .isInstanceOf(BusinessException.class).hasMessageContaining("尚未完成");

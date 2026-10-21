@@ -2,8 +2,6 @@ package com.ym.ai_story_studio_server.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import com.ym.ai_story_studio_server.provider.TextGenerationProvider;
-import com.ym.ai_story_studio_server.provider.TextGenerationResult;
 import com.ym.ai_story_studio_server.config.AiProperties;
 import com.ym.ai_story_studio_server.dto.ai.AiParseScriptResult;
 import com.ym.ai_story_studio_server.exception.BusinessException;
@@ -60,10 +58,11 @@ public class ShotServiceImpl implements ShotService {
     private final SceneLibraryMapper sceneLibraryMapper;
     private final AssetMapper assetMapper;
     private final AssetVersionMapper assetVersionMapper;
-    private final TextGenerationProvider textProvider;
+    private final com.ym.ai_story_studio_server.workbench.PromptTextExecution promptTextExecution;
     private final AiProperties aiProperties;
     private final JobMapper jobMapper;
     private final JobItemMapper jobItemMapper;
+    private final com.ym.ai_story_studio_server.workbench.WorkbenchLibraryService library;
 
     @Override
     public List<ShotVO> getShotList(Long userId, Long projectId) {
@@ -462,63 +461,10 @@ public class ShotServiceImpl implements ShotService {
      * @return AI解析结果，包含分镜段落、角色名称和场景描述
      */
     private AiParseScriptResult parseScriptWithCharactersAndScenes(String fullScript) {
-        String systemPrompt = """
-            一、你是一个专业的剧本大师，请将以下文案转换为剧本格式，并提取角色和场景信息
-            
-            要求：
-            1.将内容分镜化，每个镜头的字数严格控制在99字以内
-            2.保持文案所有情节，角色对话全部保留，不得增删改一字
-            3.严格按照剧本格式输出
-            4.提取剧本中出现的所有角色名称
-            5.提取剧本中涉及的所有场景描述
-            
-            格式规范:
-            -场景编号格式:场x-y，如"场1-1"代表第1集第一个场景
-            -时间信息:夜/日，清晰表明是晚上还是白天
-            -地点类型:外/内，明确是室外还是室内
-            -具体地点:如别墅、酒店、广场等
-            -使用括号标注镜头和动作
-            -不要使用**等非剧本格式的符号
-            -允许使用的景别：中景、近景、特写
-            -中景：用于展示两人互动、相对位置或上半身动作
-            -近景：用于常规对话、面部表情捕捉
-            -特写：用于强调手部动作、物品细节或眼神微表情
-            
-            输出格式要求：
-            1. 使用JSON格式输出，包含三个字段：script_segments、characters、scenes
-            2. script_segments: 分镜段落列表，每个分镜之间用 "---" 分隔
-            3. characters: 角色名称列表，去重，只包含人名，不包含描述
-            4. scenes: 场景描述列表，包含时间、地点、环境等描述
-            5. JSON格式如下：
-            {
-                "script_segments": [
-                    "场1-1 日 内 咖啡厅\n出场人物:林辰、林清雪\n（中景）林辰和林清雪面对面坐着，桌上放着咖啡，叶辰说：\"我想和你谈谈我们的未来。\"\n（近景）叶辰表情严肃，镜头切至林清雪抬头看他，林清雪说：\"什么意思？\"\n（特写）叶辰的手从包里拿出户口本放在桌上，叶辰说：\"我想和你结婚。\"",
-                    "场1-2 日 内 咖啡厅\n出场人物:林辰、林清雪\n（近景）林清雪震惊地看着户口本，林清雪说：\"可是...我爸不同意。\"\n（特写）叶辰紧紧握住林清雪的手，叶辰说：\"我会说服他的，相信我。\"\n（中景）林清雪流泪，随后坚定地点头。林清雪说：\"我相信你。\""
-                ],
-                "characters": ["林辰", "林清雪"],
-                "scenes": ["咖啡厅 日 内", "咖啡厅 日 内"]
-            }
-            
-            直接输出JSON，不要其他说明。
-            """;
-
-        String prompt = systemPrompt + "\n\n用户文案：\n" + fullScript;
-
-        // 调用AI生成
         AiProperties.Text textConfig = aiProperties.getText();
-        TextGenerationResult response = textProvider.generateText(
-                prompt,
-                textConfig.getModel(),
-                textConfig.getMaxTokens(),
-                0.3,  // 使用较低的温度以获得更稳定的输出
-                0.9
-        );
+        String generatedText = promptTextExecution.generate(library.published("SHOT_PARSE_ASSETS"),
+                fullScript, textConfig.getModel(), textConfig.getMaxTokens());
 
-        // 提取生成的文本
-        String generatedText = response.text();
-
-        log.debug("AI解析结果: {}", generatedText);
-        
         // 解析JSON响应
         return parseAiResponseToJson(generatedText);
     }
@@ -695,64 +641,9 @@ public class ShotServiceImpl implements ShotService {
      * @return 分镜段落列表
      */
     private List<String> parseScriptToSegments(String fullScript) {
-        String systemPrompt = """
-            一、你是一个专业的剧本大师，请将以下文案转换为剧本格式
-            
-            要求：
-            1.将内容分镜化，每个镜头的字数严格控制在99字以内
-            2.保持文案所有情节，角色对话全部保留，不得增删改一字
-            3.严格按照剧本格式输出
-            
-            格式规范:
-            -场景编号格式:场x-y，如"场1-1"代表第1集第一个场景
-            -时间信息:夜/日，清晰表明是晚上还是白天
-            -地点类型:外/内，明确是室外还是室内
-            -具体地点:如别墅、酒店、广场等
-            -使用括号标注镜头和动作
-            -不要使用**等非剧本格式的符号
-            -允许使用的景别：中景、近景、特写
-            -中景：用于展示两人互动、相对位置或上半身动作
-            -近景：用于常规对话、面部表情捕捉
-            -特写：用于强调手部动作、物品细节或眼神微表情
-            
-            输出格式要求：
-            1. 直接输出每个分镜场景
-            2. 每个分镜之间用 "---" 分隔
-            3. 不要在开头汇总角色或场景
-            
-            示例格式:
-            场1-1 日 内 咖啡厅
-            出场人物:林辰、林清雪
-            （中景）林辰和林清雪面对面坐着，桌上放着咖啡，叶辰说：“我想和你谈谈我们的未来。”
-            （近景）叶辰表情严肃，镜头切至林清雪抬头看他，林清雪说：“什么意思？”
-            （特写）叶辰的手从包里拿出户口本放在桌上，叶辰说：“我想和你结婚。”
-            ---
-            场1-2 日 内 咖啡厅
-            出场人物:林辰、林清雪
-            （近景）林清雪震惊地看着户口本，林清雪说：“可是...我爸不同意。”
-            （特写）叶辰紧紧握住林清雪的手，叶辰说：“我会说服他的，相信我。”
-            （中景）林清雪流泪，随后坚定地点头。林清雪说：“我相信你。”
-            ---
-            
-            直接输出分镜内容，不要其他说明。
-            """;
-
-        String prompt = systemPrompt + "\n\n用户文案：\n" + fullScript;
-
-        // 调用AI生成
         AiProperties.Text textConfig = aiProperties.getText();
-        TextGenerationResult response = textProvider.generateText(
-                prompt,
-                textConfig.getModel(),
-                textConfig.getMaxTokens(),
-                0.3,  // 使用较低的温度以获得更稳定的输出
-                0.9
-        );
-
-        // 提取生成的文本
-        String generatedText = response.text();
-
-        log.debug("AI解析结果: {}", generatedText);
+        String generatedText = promptTextExecution.generate(library.published("SHOT_PARSE_SEGMENTS"),
+                fullScript, textConfig.getModel(), textConfig.getMaxTokens());
 
         // 按分隔符拆分
         return Arrays.stream(generatedText.split("---"))
