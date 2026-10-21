@@ -34,6 +34,13 @@ export const router = createBrowserRouter([
             },
           },
           {
+            path: 'brainstorm/:id?',
+            lazy: async () => {
+              const { BrainstormPage } = await import('@/features/brainstorm/BrainstormPage')
+              return { Component: BrainstormPage }
+            },
+          },
+          {
             path: 'creation/:id?',
             lazy: async () => {
               const { CreationPage } = await import('@/features/creation/CreationPage')

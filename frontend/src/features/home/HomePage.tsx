@@ -212,6 +212,9 @@ export function HomePage() {
                 </div>
               </div>
             </div>
+            <Button type="primary" onClick={() => navigate('/brainstorm')}>
+              头脑风暴 · 资料与大纲创作
+            </Button>
             <Button type="primary" onClick={() => navigate('/creation')}>
               文字创作 · 从简报生成剧本与分镜
             </Button>

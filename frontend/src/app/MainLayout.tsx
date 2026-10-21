@@ -28,7 +28,8 @@ const NAV: {
 }[] = [
   { icon: Home, key: 'home', label: '首页', to: '/home' },
   { icon: PenLine, key: 'creation', label: '文字创作', to: '/creation' },
-  { icon: Sparkles, key: 'toolbox', label: 'AI 工具箱', to: '/toolbox' },
+  { icon: Sparkles, key: 'toolbox', label: '头脑风暴', to: '/brainstorm' },
+  { icon: Sparkles, key: 'toolbox', label: '文字对话与历史', to: '/toolbox' },
   { icon: WalletCards, key: 'wallet', label: '钱包', to: '/wallet' },
   { icon: CircleDollarSign, key: 'recharge', label: '充值', to: '/recharge' },
   { icon: Users, key: 'invite', label: '邀请', to: '/invite' },

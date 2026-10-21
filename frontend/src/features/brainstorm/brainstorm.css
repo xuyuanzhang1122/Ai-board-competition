@@ -1,0 +1,6 @@
+.brainstorm-directions { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 16px; }
+.brainstorm-direction { display: flex; flex-direction: column; gap: 12px; padding: 18px; border: 1px solid #e2e8f0; border-radius: 16px; background: #fff; }
+.brainstorm-selected { border-color: #fb7185; background: #fff8f6; box-shadow: 0 0 0 1px #fb7185; }
+.brainstorm-select { display: flex; align-items: center; gap: 10px; }
+.brainstorm-select input { accent-color: #f97316; }
+.brainstorm-steps { display: flex; flex-direction: column; gap: 12px; padding-left: 24px; }
