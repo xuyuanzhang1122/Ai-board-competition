@@ -34,28 +34,34 @@ PUT `/{id}` `{revision,brief,outline}` saves human edits, invalidates confirmati
 ## Tasks
 
 ### Task 1: Knowledge and prompt backend
-- [ ] RED→GREEN tests for review invalidation, stale edits, expiry, authorization, immutable prompts and publication conflicts.
-- [ ] V40 migration plus library service/controllers, seeded existing creation prompts, creation lookup switched to published version; snapshot semantics preserved.
-- [ ] Inventory other runtime business prompts, migrate active text prompts where feasible in this unit, record exact residual media templates rather than claim all migrated.
-- [ ] Full Java unit suite, commit with evidence.
+- [x] RED→GREEN tests for review invalidation, stale edits, expiry, authorization, immutable prompts and publication conflicts.
+- [x] V40 migration plus library service/controllers, seeded existing creation prompts, creation lookup switched to published version; snapshot semantics preserved.
+- [x] Inventory other runtime business prompts, migrate active text prompts where feasible in this unit, record exact residual media templates rather than claim all migrated.
+- [x] Full Java unit suite, commit with evidence.
 
 ### Task 2: Admin management UI
-- [ ] Separate knowledge editor/review page and versioned prompt editor/publish/disable/history page; route/nav additions.
-- [ ] API/state tests first, conflict/error retention, no unsaved edits overwritten on refresh.
-- [ ] Tests, typecheck/build/lint, commit. Depends only shared API contract; backend may be developed independently.
+- [x] Separate knowledge editor/review page and versioned prompt editor/publish/disable/history page; route/nav additions.
+- [x] API/state tests first, conflict/error retention, no unsaved edits overwritten on refresh.
+- [x] Tests, typecheck/build/lint, commit. Depends only shared API contract; backend may be developed independently.
 
 ### Task 3: Controlled brainstorm backend
-- [ ] V41 tables, owned revision/idempotency, persisted worker using existing jobs and provider snapshots.
-- [ ] White-listed structured decisions and tools; approved knowledge, bounded external adapter, source validation, 2–3 directions, human confirmation and idempotent creation handoff/export.
-- [ ] RED→GREEN for invalid tool/limit/citation, restart/unknown acceptance, stale adoption, cross-user access, handoff and immutable snapshots. Full tests and commit.
+- [x] V41 tables, owned revision/idempotency, persisted worker using existing jobs and provider snapshots.
+- [x] White-listed structured decisions and tools; approved knowledge, bounded external adapter, source validation, 2–3 directions, human confirmation and idempotent creation handoff/export.
+- [x] RED→GREEN for invalid tool/limit/citation, restart/unknown acceptance, stale adoption, cross-user access, handoff and immutable snapshots. Full tests and commit.
 
 ### Task 4: Brainstorm UI and integration
-- [ ] Account-session-bound API, recovery UUID, server polling; brief and outline editing, selected direction/reason and confirmation; step evidence and JSON export, route to creation.
-- [ ] Main toolbox entry labeled 头脑风暴, historical conversation remains readable under original text chat entry.
-- [ ] API/state/components tests, test/build/typecheck/lint, commit.
+- [x] Account-session-bound API, recovery UUID, server polling; brief and outline editing, selected direction/reason and confirmation; step evidence and JSON export, route to creation.
+- [x] Main toolbox entry labeled 头脑风暴, historical conversation remains readable under original text chat entry.
+- [x] API/state/components tests, test/build/typecheck/lint, commit.
 
 ### Task 5: Review and real acceptance
-- [ ] Independent review, repair important findings with regressions.
-- [ ] Isolated migrations/restart; admin knowledge edit/review and prompt publish; user knowledge filtering and permission rejection.
-- [ ] Real text brainstorm, tool evidence, choose/edit/confirm outline, handoff and script continuity; refresh/idempotency/export. No media calls.
-- [ ] Update original task register and acceptance evidence with exact scope, commands/counts, commits and remaining tasks. Commit; report honest final state.
+- [x] Independent review, repair important findings with regressions.
+- [x] Isolated migrations/restart; admin knowledge edit/review and prompt publish; user knowledge filtering and permission rejection.
+- [x] Real text brainstorm, tool evidence, choose/edit/confirm outline, handoff and script continuity; refresh/idempotency/export. No media calls.
+- [x] Update original task register and acceptance evidence with exact scope, commands/counts, commits and remaining tasks. Commit; report honest final state.
+
+## Completion evidence (2026-10-21)
+
+本次优先功能基础实现与真实文字链路验收已完成。详见 docs/competition/受控头脑风暴与审核提示词验收记录.md 及原任务总表。独立交叉检查与主代理复核发现的问题已修复并补回归；中断后收尾由主代理完成，不声称中断后的全部改动另经第二位审查者复核。
+
+实际 MySQL 迁移至 V44；Java *Test 213、用户端320、管理端12通过。外网实际服务调用遇本机保留地址DNS，安全阻断有证据，成功页面读取未验收。资产描述前端模板、媒体拼接与旧预设迁移仍明确留在原总表 R08/M4；项目整体未完成。
