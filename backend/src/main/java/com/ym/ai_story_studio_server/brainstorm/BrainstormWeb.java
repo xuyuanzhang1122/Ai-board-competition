@@ -40,6 +40,7 @@ public class BrainstormWeb {
         body.putArray("sources").add("web");
         JsonNode response = request("/search", body);
         var sources = json.createArrayNode();
+        int rejected = 0;
         JsonNode results = response.path("data").path("web");
         if (!response.path("success").asBoolean()) return failed();
         for (JsonNode item : results) {
@@ -47,8 +48,11 @@ public class BrainstormWeb {
             try {
                 String url = urls.validate(item.path("url").asText());
                 sources.add(source(url, item.path("title").asText("网页检索结果"), item.path("description").asText("")));
-            } catch (IllegalArgumentException ignored) { /* Unsafe results are not returned to the agent. */ }
+            } catch (IllegalArgumentException ignored) { rejected++; /* Unsafe results are not returned to the agent. */ }
         }
+        if (sources.isEmpty() && rejected > 0) return json.createObjectNode().put("status", "BLOCKED")
+                .put("message", "检索结果未通过公开网址校验；可能为保留地址或本机代理DNS，勿重复检索同一资料。请使用审核知识或请求补充资料。")
+                .set("sources", sources);
         return result(sources);
     }
     public JsonNode read(String rawUrl) {

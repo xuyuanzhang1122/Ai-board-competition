@@ -65,11 +65,17 @@ public class WorkbenchLibraryService {
         String filter = approved
                 ? " AND status='APPROVED' AND (fact_type<>'FACT' OR valid_until IS NULL OR valid_until>=CURRENT_DATE)"
                 : "";
-        String like = queryPattern(query);
-        return db.query("""
-                SELECT * FROM workbench_knowledge
-                WHERE (title LIKE ? ESCAPE '!' OR content LIKE ? ESCAPE '!' OR topics LIKE ? ESCAPE '!')
-                """ + filter + " ORDER BY id DESC LIMIT 100", knowledgeMapper, like, like, like);
+        queryPattern(query); // Validate the complete query before limiting its terms.
+        String[] terms = value(query).trim().split("\\s+");
+        var conditions = new java.util.ArrayList<String>();
+        var arguments = new java.util.ArrayList<Object>();
+        for (String term : java.util.Arrays.stream(terms).limit(8).toList()) {
+            String like = queryPattern(term);
+            conditions.add("(title LIKE ? ESCAPE '!' OR content LIKE ? ESCAPE '!' OR topics LIKE ? ESCAPE '!')");
+            arguments.add(like); arguments.add(like); arguments.add(like);
+        }
+        return db.query("SELECT * FROM workbench_knowledge WHERE (" + String.join(" OR ", conditions) + ")"
+                + filter + " ORDER BY id DESC LIMIT 100", knowledgeMapper, arguments.toArray());
     }
 
     private Knowledge knowledge(long id, boolean lock) {

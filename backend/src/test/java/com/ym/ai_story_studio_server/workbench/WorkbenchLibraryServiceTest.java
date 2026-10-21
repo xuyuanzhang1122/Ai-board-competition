@@ -80,6 +80,13 @@ class WorkbenchLibraryServiceTest {
             assertThat(db.queryForObject("SELECT COUNT(*) FROM workbench_prompts WHERE stage='SCRIPT' AND status='PUBLISHED'",Integer.class)).isEqualTo(1);
         } finally {pool.shutdownNow();}
     }
+    @Test void naturalLanguageSearchMatchesIndividualKeywordsWithoutExposingDrafts() {
+        var k=service.createKnowledge(edit(0,"八仙过海",null));
+        service.reviewKnowledge(k.id(),new Review(1,"APPROVED","核验"));
+        service.createKnowledge(edit(0,"八仙未审核",null));
+        assertThat(service.approvedKnowledge("八仙过海 协作 改编边界")).hasSize(1);
+        assertThat(service.approvedKnowledge("不存在关键词")).isEmpty();
+    }
     @Test void unknownPromptVariablesAreRejected() {
         assertThatThrownBy(()->service.createPrompt(new PromptCreate("SCRIPT","text","credentials","TEXT","unknown variable"))).hasMessageContaining("变量");
     }

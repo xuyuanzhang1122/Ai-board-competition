@@ -20,6 +20,12 @@ class BrainstormWebTest {
         assertThrows(IllegalArgumentException.class, () -> privateDns.validate("https://public-looking.example"));
         assertThrows(IllegalArgumentException.class, () -> urls.validate("https://[::ffff:127.0.0.1]"));
     }
+    @Test void reservedProxyDnsMakesBlockedSearchEvidenceInsteadOfAnEmptySuccess() throws Exception {
+        var reserved = new PublicWebUrls(host -> new InetAddress[]{InetAddress.getByName("198.18.0.26")});
+        var web = new BrainstormWeb(json,"secret",reserved,(path,body,key) -> json.readTree("{\"success\":true,\"data\":{\"web\":[{\"url\":\"https://example.com/story\"}]}}"));
+        assertEquals("BLOCKED",web.search("主题").path("status").asText());
+        assertTrue(web.search("主题").path("sources").isEmpty());
+    }
     @Test void missingKeyIsExplicitlyUnavailable() {
         var web = new BrainstormWeb(json, "", urls, (path, body, key) -> { fail("must not call without key"); return null; });
         assertEquals("UNAVAILABLE", web.search("八仙过海").path("status").asText());

@@ -166,5 +166,17 @@ class BrainstormServiceTest {
         service.synchronizeResults();
         assertThat(service.detail(d.id()).runs().get(0).steps().get(0).result().toString()).contains("截断结果");
     }
+    @Test void repairContextRetainsRejectedDecisionAndBlockedPageDoesNotLoseEvidence() throws Exception {
+        var d=draft();var r=run(d);String truncated="{\"tool\":\"save_draft\",\"arguments\":{";
+        decide(r,truncated);
+        var validation=service.detail(d.id()).runs().get(0).steps().stream().filter(step->step.tool().equals("VALIDATION")).findFirst().orElseThrow();
+        assertThat(validation.result().path("rejectedDecision").asText()).isEqualTo(truncated);
+        when(web.read(anyString())).thenThrow(new IllegalArgumentException("reserved DNS"));
+        decide(r,"{\"tool\":\"read_page\",\"arguments\":{\"url\":\"https://example.com/story\"}}");
+        var latest=service.detail(d.id()).runs().get(0);
+        assertThat(latest.status()).isEqualTo("PENDING");
+        assertThat(latest.steps().stream().filter(step->step.tool().equals("read_page")).findFirst().orElseThrow().result().path("status").asText()).isEqualTo("BLOCKED");
+        assertThat(db.queryForObject("SELECT page_count FROM brainstorm_runs WHERE id=?",Integer.class,r.id())).isZero();
+    }
     Direction direction(String id) {return new Direction(id,"标题","角度","信息",List.of("情节"),"情绪","行动",List.of(),List.of("纯虚构"));}
 }

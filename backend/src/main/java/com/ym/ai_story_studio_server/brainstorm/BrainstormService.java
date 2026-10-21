@@ -152,11 +152,11 @@ public class BrainstormService {
         db.update("UPDATE brainstorm_steps SET status=?,result_json=? WHERE run_id=? AND job_id=? AND tool='MODEL'",status,encode(Map.of("output",raw.length()>40000?raw.substring(0,40000):raw)),run,r.get("job_id"));
         if(!"SUCCEEDED".equals(status)){pause(run,"上游任务失败或受理状态未知，需人工核对；未自动重发");return;}
         try{execute(run,r,contract.decision(raw));}
-        catch(BusinessException e){repair(run,r,e.getMessage());}
-        catch(Exception e){pause(run,"工具执行失败，资料与任务已保留，请人工核对");}
+        catch(BusinessException e){repair(run,r,e.getMessage(),raw);}
+        catch(Exception e){evidence(run,"TOOL_ERROR","ERROR","工具执行失败",Map.of("errorType",e.getClass().getSimpleName(),"message","未自动重试，请人工核对"));pause(run,"工具执行失败，资料与任务已保留，请人工核对");}
     }
-    private void repair(long run,Map<String,Object> r,String message) {
-        evidence(run,"VALIDATION","INVALID","结构校验",Map.of("error",message));
+    private void repair(long run,Map<String,Object> r,String message,String raw) {
+        evidence(run,"VALIDATION","INVALID","结构校验",Map.of("error",message,"rejectedDecision",raw.length()>40000?raw.substring(0,40000):raw));
         int repairs=((Number)r.get("repairs")).intValue();
         if(repairs>=((Number)r.get("max_repairs")).intValue()){pause(run,"格式修复达到本次上限："+message);return;}
         db.update("UPDATE brainstorm_runs SET repairs=repairs+1 WHERE id=?",run);queueNext(run);
@@ -183,7 +183,9 @@ public class BrainstormService {
                 int pages=((Number)r.get("page_count")).intValue();
                 int pageLimit=((Number)r.get("max_pages")).intValue();
                 if(pages>=pageLimit){pause(run,"外部页面达到本次上限，已保留中间结果");return;}
-                JsonNode found="web_search".equals(tool)?web.search(argument(args,"query",200)):web.read(argument(args,"url",2000));
+                JsonNode found;
+                try { found="web_search".equals(tool)?web.search(argument(args,"query",200)):web.read(argument(args,"url",2000)); }
+                catch (IllegalArgumentException blocked) { found=json.createObjectNode().put("status","BLOCKED").put("message","公开网址校验未通过；可能为私网、保留地址或本机代理DNS。不得改用内网或继续尝试同一地址，请使用审核知识并说明外部资料未取得。").set("sources",json.createArrayNode()); }
                 require(found!=null && found.isObject(),"外部服务不可用");
                 ArrayNode accepted=json.createArrayNode();
                 for(JsonNode source:found.path("sources")) {
