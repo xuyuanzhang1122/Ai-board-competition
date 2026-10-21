@@ -196,7 +196,7 @@ public class BrainstormService {
                     accepted.add(frozen);
                 }
                 merge(sources,accepted);db.update("UPDATE brainstorm_runs SET page_count=page_count+? WHERE id=?",accepted.size(),run);
-                result=Map.of("status",found.path("status").asText("UNAVAILABLE"),"sources",accepted);
+                result=Map.of("status",found.path("status").asText("UNAVAILABLE"),"message",found.path("message").asText("外部资料仅作待核实线索"),"sources",accepted);
             }
             case "validate_sources" -> {
                 JsonNode ids=args.path("sourceIds");require(ids.isArray()&&ids.size()<=20,"来源参数无效");
