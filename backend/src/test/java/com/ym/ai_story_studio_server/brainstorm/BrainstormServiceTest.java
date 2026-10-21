@@ -25,7 +25,7 @@ class BrainstormServiceTest {
         db = new JdbcTemplate(ds);
         for (String sql : Files.readString(Path.of("src/main/resources/db/migration/V41__controlled_brainstorm.sql")).split(";")) if (!sql.isBlank()) db.execute(sql);
         for (String sql : Files.readString(Path.of("src/main/resources/db/migration/V42__brainstorm_audit_limits.sql")).split(";")) if (!sql.isBlank()) db.execute(sql);
-        db.execute("CREATE TABLE jobs(id BIGINT PRIMARY KEY,user_id BIGINT,project_id BIGINT,status VARCHAR(24),meta_json CLOB,error_message CLOB,finished_at TIMESTAMP)");
+        db.execute("CREATE TABLE jobs(id BIGINT PRIMARY KEY,user_id BIGINT,project_id BIGINT,status VARCHAR(24),meta_json CLOB,error_message CLOB,finished_at TIMESTAMP,started_at TIMESTAMP)");
         text = mock(AiTextService.class); creation = mock(CreationService.class);
         library = mock(WorkbenchLibraryService.class); web=mock(BrainstormWeb.class);
         when(library.approvedKnowledge(anyString())).thenReturn(List.of());
@@ -33,7 +33,7 @@ class BrainstormServiceTest {
         var sequence = new java.util.concurrent.atomic.AtomicLong(10);
         when(text.createQueuedConversationJob(anyLong(),anyString(),anyList())).thenAnswer(i -> {
             Job job = new Job(); job.setId(sequence.incrementAndGet());
-            db.update("INSERT INTO jobs VALUES(?,?,0,'PENDING','{}',NULL,NULL)", job.getId(), i.<Long>getArgument(0)); return job;
+            db.update("INSERT INTO jobs(id,user_id,project_id,status,meta_json,error_message,finished_at) VALUES(?,?,0,'PENDING','{}',NULL,NULL)", job.getId(), i.<Long>getArgument(0)); return job;
         });
         service = new BrainstormService(db, new TransactionTemplate(new DataSourceTransactionManager(ds)), json,
                 text, library, creation, new StoryboardContract(json), new BrainstormContract(json), web);
@@ -177,6 +177,13 @@ class BrainstormServiceTest {
         assertThat(latest.status()).isEqualTo("PENDING");
         assertThat(latest.steps().stream().filter(step->step.tool().equals("read_page")).findFirst().orElseThrow().result().path("status").asText()).isEqualTo("BLOCKED");
         assertThat(db.queryForObject("SELECT page_count FROM brainstorm_runs WHERE id=?",Integer.class,r.id())).isZero();
+    }
+    @Test void exportIncludesActualModelSnapshotAndProviderUsageWithoutUnrelatedMetadata() throws Exception {
+        var d=draft();var r=run(d);
+        String metadata=json.writeValueAsString(Map.of("textSnapshot",Map.of("messages",List.of(Map.of("role","system","content","frozen actual prompt")),"maxTokens",4096),"provider","official","inputTokens",10,"outputTokens",20,"unrelatedPrivateField","omit"));
+        db.update("UPDATE jobs SET meta_json=?",metadata);
+        String exported=json.writeValueAsString(service.export(d.id()).get("modelExecutions"));
+        assertThat(exported).contains("frozen actual prompt","maxTokens","4096","official","inputTokens","outputTokens").doesNotContain("unrelatedPrivateField","omit");
     }
     Direction direction(String id) {return new Direction(id,"标题","角度","信息",List.of("情节"),"情绪","行动",List.of(),List.of("纯虚构"));}
 }

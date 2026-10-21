@@ -273,6 +273,18 @@ public class BrainstormService {
     }
     public Map<String,Object> export(long id) {
         Draft d=detail(id);var output=new LinkedHashMap<String,Object>();output.put("disclaimer","本版本仅供参赛展示与评审使用，非正式商业版本。");output.put("brand","2026 山东省首届大学生 AI 大模型创新传播大赛 · 你的不对我的队");output.put("draft",d);
+        output.put("modelExecutions",db.query("""
+                SELECT j.id,j.status,j.started_at,j.finished_at,j.meta_json
+                FROM jobs j JOIN brainstorm_steps s ON s.job_id=j.id AND s.tool='MODEL'
+                JOIN brainstorm_runs r ON r.id=s.run_id WHERE r.draft_id=? ORDER BY j.id
+                """,(row,n)->{
+                    var execution=new LinkedHashMap<String,Object>();
+                    execution.put("jobId",row.getLong("id")); execution.put("status",row.getString("status"));
+                    execution.put("startedAt",row.getString("started_at")); execution.put("finishedAt",row.getString("finished_at"));
+                    JsonNode metadata=tree(row.getString("meta_json"));
+                    for(String field:List.of("textSnapshot","provider","upstreamModel","providerRequestId","tokensUsed","inputTokens","outputTokens","usageKnown")) execution.put(field,metadata.path(field));
+                    return execution;
+                },id));
         output.put("events",db.queryForList("SELECT * FROM brainstorm_events WHERE draft_id=? ORDER BY id",id));
         output.put("sources",db.queryForList("SELECT id,sources_json,prompt_version,prompt_content,input_json,max_tools,max_pages,max_repairs FROM brainstorm_runs WHERE draft_id=? ORDER BY id",id));
         output.put("handoffSnapshot",tree(db.queryForObject("SELECT handoff_snapshot FROM brainstorm_drafts WHERE id=?",String.class,id)));return output;
