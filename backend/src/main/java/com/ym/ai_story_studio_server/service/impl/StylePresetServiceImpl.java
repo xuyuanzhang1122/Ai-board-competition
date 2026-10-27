@@ -32,15 +32,15 @@ import java.util.stream.Collectors;
 public class StylePresetServiceImpl implements StylePresetService {
 
     private final StylePresetMapper stylePresetMapper;
+    private final com.ym.ai_story_studio_server.workbench.WorkbenchLibraryService library;
 
     @Override
     public List<StylePresetVO> getEnabledStylePresets() {
         log.info("查询已启用的风格预设列表");
 
-        // 1. 构建查询条件: enabled = 1, 按sort_order升序排序
+        // 发布状态由不可变模板版本决定；旧 enabled 字段仅作为历史数据保留。
         LambdaQueryWrapper<StylePreset> queryWrapper = new LambdaQueryWrapper<>();
-        queryWrapper.eq(StylePreset::getEnabled, 1)
-                .orderByAsc(StylePreset::getSortOrder);
+        queryWrapper.orderByAsc(StylePreset::getSortOrder);
 
         // 2. 执行查询
         List<StylePreset> stylePresets = stylePresetMapper.selectList(queryWrapper);
@@ -49,16 +49,21 @@ public class StylePresetServiceImpl implements StylePresetService {
 
         // 3. 转换为VO列表
         List<StylePresetVO> voList = stylePresets.stream()
-                .map(entity -> new StylePresetVO(
+                .map(entity -> {
+                    var prompt = library.publishedOrNull("STYLE_PRESET_" + entity.getId());
+                    if (prompt == null) return null;
+                    return new StylePresetVO(
                         entity.getId(),
                         entity.getCode(),
                         entity.getName(),
                         entity.getThumbnailUrl(),
-                        entity.getPromptPrefix(),
+                        prompt.content(),
                         entity.getSortOrder(),
-                        entity.getEnabled(),
+                        1,
                         entity.getCreatedAt()
-                ))
+                );
+                })
+                .filter(java.util.Objects::nonNull)
                 .collect(Collectors.toList());
 
         log.info("风格预设列表转换完成,返回{}条记录", voList.size());

@@ -115,6 +115,7 @@ describe('ShotImageGeneratePanel generation', () => {
       }),
     )
     expect(result[0]?.imageUrls).toEqual(['https://cdn.test/generated.png'])
+    expect(generateSingleShot.mock.calls[0]?.[2]).not.toHaveProperty('customPrompt')
   })
 })
 
@@ -134,6 +135,7 @@ describe('VideoGeneratePanel request mapping', () => {
       size: '720x1280',
     })
 
+    expect(request.prompt).toBe(shot.scriptText)
     expect(request).toMatchObject({
       aspectRatio: '9:16',
       characters: [{ id: 21, thumbnailUrl: 'https://cdn.test/character.png' }],

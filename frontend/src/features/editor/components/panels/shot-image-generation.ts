@@ -10,14 +10,7 @@ import {
 export const SHOT_IMAGE_ASPECT_RATIOS = ['16:9', '1:1', '9:16', '21:9'] as const
 export type ShotImageAspectRatio = NonNullable<ShotGenerationParams['aspectRatio']>
 
-const SHOT_IMAGE_PROMPT_PREFIX =
-  '请根据以下分镜剧本生成单张画面。保持参考图中角色、场景和道具的外观一致，构图清晰，不要添加字幕、水印或画外文字。分镜剧本：'
-
 export const shotImageHistoryKey = (shotId: number) => `shot_generation_history_${shotId}`
-
-export function buildShotImagePrompt(scriptText: string): string {
-  return `${SHOT_IMAGE_PROMPT_PREFIX}${scriptText.trim() || '（无剧本内容）'}`
-}
 
 export interface GenerateShotImagesInput {
   additionalReferenceUrls?: Array<string | null | undefined>
@@ -51,7 +44,7 @@ export async function generateShotImages(
   input: GenerateShotImagesInput,
   deps: ShotImageGenerationDeps,
 ): Promise<ShotImageGenerationResult[]> {
-  const prompt = buildShotImagePrompt(input.shot.scriptText)
+  const prompt = input.shot.scriptText
   const sourceUrls = collectShotReferenceImageUrls(input.shot, {
     additionalUrls: input.additionalReferenceUrls,
   })
@@ -66,7 +59,6 @@ export async function generateShotImages(
     if (deps.signal?.aborted) break
     const response = await deps.generateSingleShot(input.projectId, input.shot.id, {
       aspectRatio: input.aspectRatio,
-      customPrompt: prompt,
       model: input.model || '',
       referenceImageUrl: referenceImageUrl ?? undefined,
     })

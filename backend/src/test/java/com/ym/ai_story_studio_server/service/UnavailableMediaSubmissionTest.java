@@ -36,7 +36,7 @@ class UnavailableMediaSubmissionTest {
     void videoRejectsBeforeCreatingJobsOrStartingWorker() {
         var jobs = mock(JobMapper.class);
         var worker = mock(AsyncVideoTaskService.class);
-        var service = new AiVideoService(new UnavailableMediaProvider(), worker, jobs, mock(ProjectMapper.class),
+        var service = new AiVideoService(null, new UnavailableMediaProvider(), worker, jobs, mock(ProjectMapper.class),
                 new AiProperties(), new ObjectMapper());
         var request = new VideoGenerateRequest("八仙过海", "16:9", 5, null, null, 0L, "sd-api-2-fast-720p");
         assertThatThrownBy(() -> service.generateVideo(request)).isInstanceOf(BusinessException.class);
@@ -48,7 +48,7 @@ class UnavailableMediaSubmissionTest {
         var jobs = mock(JobMapper.class);
         var mq = mock(MQProducer.class);
         var provider = new UnavailableMediaProvider();
-        var service = new BatchGenerationService(mq, jobs, mock(JobItemMapper.class), mock(ProjectMapper.class),
+        var service = new BatchGenerationService(null, mq, jobs, mock(JobItemMapper.class), mock(ProjectMapper.class),
                 mock(StoryboardShotMapper.class), mock(ProjectCharacterMapper.class), mock(ProjectSceneMapper.class),
                 mock(ProjectPropMapper.class), mock(SceneLibraryMapper.class), mock(ShotBindingMapper.class),
                 new ObjectMapper(), provider, provider, new AiProperties(), mock(AiTextService.class), mock(com.ym.ai_story_studio_server.workbench.WorkbenchLibraryService.class));

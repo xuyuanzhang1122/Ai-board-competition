@@ -407,6 +407,13 @@ export const assetApi = {
 }
 
 export const textGenerationApi = {
+  describeAsset(
+    data: { assetType: 'character' | 'scene' | 'prop'; assetName: string; sourceText: string },
+    projectId: number,
+    options?: { model?: string },
+  ): Promise<{ text: string }> {
+    return api.post('/generate/asset-description', { ...data, projectId, model: options?.model }, { timeout: 120_000 })
+  },
   generateText(
     prompt: string,
     projectId: number,

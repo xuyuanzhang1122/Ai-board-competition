@@ -8,9 +8,6 @@ export type VideoSize = string
 export const VIDEO_DURATIONS = [5, 10, 15] as const
 export type VideoDuration = number
 
-const VIDEO_PROMPT_PREFIX =
-  '根据参考图的角色、场景和道具设定生成风格一致的视频。动作与运镜合理，无字幕和 BGM；没有台词时人物不说话。画面清晰、光影自然，第一个镜头保留 0.3 秒空境，忠实呈现以下分镜：'
-
 export const VIDEO_SCENE_ASSET_REQUIRED_MESSAGE = '缺少场景画像资产，禁止生成视频'
 
 /** 场景画像资产为强制项，缺失时返回禁止生成的原因。 */
@@ -69,7 +66,7 @@ export function buildVideoGenerationRequest(
       })),
     duration: options.duration,
     model: options.model || '',
-    prompt: `${VIDEO_PROMPT_PREFIX}${shot.scriptText.trim() || '（无剧本内容）'}`,
+    prompt: shot.scriptText,
     props: shot.props
       .filter((prop) => Boolean(prop.thumbnailUrl))
       .map((prop) => ({

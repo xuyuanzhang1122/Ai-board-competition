@@ -1,5 +1,6 @@
 package com.ym.ai_story_studio_server.service;
 
+import com.ym.ai_story_studio_server.workbench.MediaPromptSnapshots;
 import com.ym.ai_story_studio_server.provider.ImageGenerationProvider;
 import com.ym.ai_story_studio_server.provider.VideoGenerationProvider;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -103,6 +104,7 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class BatchGenerationService {
+    private final MediaPromptSnapshots mediaPrompts;
 
     // private final AsyncBatchTaskService asyncBatchTaskService;  // 替换为MQ
     private final com.ym.ai_story_studio_server.mq.MQProducer mqProducer;  // 使用MQ生产者
@@ -171,9 +173,11 @@ public class BatchGenerationService {
                         ? request.aspectRatio() : aiProperties.getImage().getDefaultAspectRatio());
 
         // 3. 创建Job任务 + 子项（落库每个目标分镜，供前端读取真实 GENERATING 状态）
+        var promptSnapshots = prepareMedia(projectId, request.targetIds(), "SHOT_IMAGE", resolvedModel, resolvedAspectRatio, null, null, null, null, request.getCountPerItemOrDefault(), request.mode());
         Job job = createBatchJob(userId, projectId, "BATCH_GEN_SHOT_IMG",
                 request.targetIds().size());
         createJobItems(job.getId(), "SHOT", request.targetIds());
+        promptSnapshots.forEach((id, snapshot) -> mediaPrompts.save(job.getId(), id, snapshot));
         persistImageDispatchConfig(job, request, resolvedAspectRatio, resolvedModel);
         log.info("批量生成分镜图任务已创建 - jobId: {}", job.getId());
 
@@ -241,9 +245,11 @@ public class BatchGenerationService {
 
         // 4. 创建Job任务及每个分镜的持久化子项。Rabbit 只负责提交，
         // 主任务必须等全部上游视频真正完成后才能进入终态。
+        var promptSnapshots = prepareMedia(projectId, request.targetIds(), "SHOT_VIDEO", request.model(), request.aspectRatio(), request.duration(), null, null, null, request.getCountPerItemOrDefault(), request.mode());
         Job job = createBatchJob(userId, projectId, "BATCH_GEN_VIDEO",
                 request.targetIds().size());
         createJobItems(job.getId(), "SHOT", request.targetIds());
+        promptSnapshots.forEach((id, snapshot) -> mediaPrompts.save(job.getId(), id, snapshot));
         log.info("批量生成视频任务已创建 - jobId: {}", job.getId());
 
         // 3. 发送MQ消息执行批量生成
@@ -307,9 +313,11 @@ public class BatchGenerationService {
         validateProjectCharacterIds(projectId, request.targetIds());
 
         // 2. 创建Job任务
+        var promptSnapshots = prepareMedia(projectId, request.targetIds(), "CHARACTER_IMAGE", request.model(), request.aspectRatio(), null, null, null, null, request.getCountPerItemOrDefault(), request.mode());
         Job job = createBatchJob(userId, projectId, "BATCH_GEN_CHAR_IMG",
                 request.targetIds().size());
         createJobItems(job.getId(), "PCHAR", request.targetIds());
+        promptSnapshots.forEach((id, snapshot) -> mediaPrompts.save(job.getId(), id, snapshot));
         log.info("批量生成角色画像任务已创建 - jobId: {}", job.getId());
 
         // 3. 发送MQ消息执行批量生成
@@ -372,9 +380,11 @@ public class BatchGenerationService {
         validateProjectSceneIds(projectId, request.targetIds());
 
         // 2. 创建Job任务
+        var promptSnapshots = prepareMedia(projectId, request.targetIds(), "SCENE_IMAGE", request.model(), request.aspectRatio(), null, null, null, null, request.getCountPerItemOrDefault(), request.mode());
         Job job = createBatchJob(userId, projectId, "BATCH_GEN_SCENE_IMG",
                 request.targetIds().size());
         createJobItems(job.getId(), "PSCENE", request.targetIds());
+        promptSnapshots.forEach((id, snapshot) -> mediaPrompts.save(job.getId(), id, snapshot));
         log.info("批量生成场景画像任务已创建 - jobId: {}", job.getId());
 
         // 3. 发送MQ消息执行批量生成
@@ -478,9 +488,11 @@ public class BatchGenerationService {
         validateProjectPropIds(projectId, request.targetIds());
 
         // 2. 创建Job任务
+        var promptSnapshots = prepareMedia(projectId, request.targetIds(), "PROP_IMAGE", request.model(), request.aspectRatio(), null, null, null, null, request.getCountPerItemOrDefault(), request.mode());
         Job job = createBatchJob(userId, projectId, "BATCH_GEN_PROP_IMG",
                 request.targetIds().size());
         createJobItems(job.getId(), "PPROP", request.targetIds());
+        promptSnapshots.forEach((id, snapshot) -> mediaPrompts.save(job.getId(), id, snapshot));
         log.info("批量生成道具画像任务已创建 - jobId: {}", job.getId());
 
         // 3. 发送MQ消息执行批量生成
@@ -561,8 +573,11 @@ public class BatchGenerationService {
                 aspectRatio != null ? aspectRatio : aiProperties.getImage().getDefaultAspectRatio());
 
         // 创建 Job 任务 + 子项（落库目标分镜，供前端读取真实 GENERATING 状态）
+        var promptSnapshots = prepareMedia(projectId, java.util.List.of(shotId), "SHOT_IMAGE", resolvedModel, resolvedAspectRatio, null, null,
+                customPrompt, referenceImageUrls == null ? null : referenceImageUrls.stream().map(url -> new MediaPromptSnapshots.Reference(url, "参考图")).toList(), 1, "ALL");
         Job job = createBatchJob(userId, projectId, "BATCH_GEN_SHOT_IMG", 1);
         createJobItems(job.getId(), "SHOT", java.util.List.of(shotId));
+        promptSnapshots.forEach((id, snapshot) -> mediaPrompts.save(job.getId(), id, snapshot));
         log.info("单个分镜生成任务已创建 - jobId: {}", job.getId());
 
         // 发送MQ消息执行单个分镜生成(支持自定义prompt和参考图)
@@ -674,8 +689,15 @@ public class BatchGenerationService {
         }
 
         // 4. 创建Job任务
+        var references = new java.util.ArrayList<MediaPromptSnapshots.Reference>();
+        if (request.characters() != null) for (var asset : request.characters()) references.add(new MediaPromptSnapshots.Reference(asset.thumbnailUrl(), asset.name()));
+        if (request.props() != null) for (var asset : request.props()) references.add(new MediaPromptSnapshots.Reference(asset.thumbnailUrl(), asset.name()));
+        references.add(new MediaPromptSnapshots.Reference(sceneImageUrl, request.scene().name()));
+        if (request.referenceImageUrl() != null) references.add(new MediaPromptSnapshots.Reference(request.referenceImageUrl(), "分镜图"));
+        var promptSnapshots = prepareMedia(projectId, java.util.List.of(shotId), "SHOT_VIDEO", request.model(), request.aspectRatio(), request.duration(), request.size(), request.prompt(), references, 1, "ALL");
         Job job = createBatchJob(userId, projectId, "SINGLE_SHOT_VIDEO", 1);
         createJobItems(job.getId(), "SHOT", java.util.List.of(shotId));
+        promptSnapshots.forEach((id, snapshot) -> mediaPrompts.save(job.getId(), id, snapshot));
         log.info("单个分镜视频生成任务已创建 - jobId: {}", job.getId());
 
         // 5. 发送MQ消息执行视频生成(场景画像回填为已解析的URL,保证消费端拿到可用图片)
@@ -911,6 +933,29 @@ public class BatchGenerationService {
     /**
      * Create a batch job record.
      */
+    private java.util.Map<Long, MediaPromptSnapshots.Snapshot> prepareMedia(
+            Long projectId, List<Long> ids, String stage, String model, String ratio, Integer duration,
+            String size, String customPrompt, List<MediaPromptSnapshots.Reference> references,
+            int count, String mode) {
+        boolean video = stage.equals("SHOT_VIDEO");
+        String resolvedModel = model != null ? model : video ? aiProperties.getVideo().getModel() : aiProperties.getImage().getDefaultModel();
+        String resolvedRatio = ratio != null ? ratio : video ? aiProperties.getVideo().getDefaultAspectRatio() : aiProperties.getImage().getDefaultAspectRatio();
+        var parameters = new java.util.HashMap<String,Object>();
+        parameters.put("model", resolvedModel);
+        parameters.put("aspectRatio", video ? resolvedRatio : imageProvider.validateImageConfiguration(resolvedModel, resolvedRatio));
+        parameters.put("countPerItem", count); parameters.put("mode", mode);
+        if (video) parameters.put("duration", videoProvider.resolveVideoDuration(resolvedModel, duration != null ? duration : aiProperties.getVideo().getDefaultDuration()));
+        if (size != null) parameters.put("size", size);
+        var snapshots = new java.util.LinkedHashMap<Long, MediaPromptSnapshots.Snapshot>();
+        for (Long id : ids) {
+            var snapshot = mediaPrompts.forTarget(projectId, id, stage, parameters, customPrompt, references);
+            if (video && snapshot.referenceUrls().size() > 1 && !videoProvider.supportsMultipleReferenceImages(resolvedModel))
+                throw new BusinessException(ResultCode.PARAM_INVALID, "当前视频模型不支持已选择的多参考图，请重新选择");
+            snapshots.put(id, snapshot);
+        }
+        return snapshots;
+    }
+
     private Job createBatchJob(Long userId, Long projectId, String jobType, int totalItems) {
         Job job = new Job();
         job.setUserId(userId);

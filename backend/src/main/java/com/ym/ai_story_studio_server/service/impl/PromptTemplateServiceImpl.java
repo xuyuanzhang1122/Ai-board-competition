@@ -31,6 +31,7 @@ import java.util.stream.Collectors;
 public class PromptTemplateServiceImpl implements PromptTemplateService {
 
     private final PromptTemplateMapper templateMapper;
+    private final com.ym.ai_story_studio_server.workbench.WorkbenchLibraryService library;
 
     @Override
     public List<PromptTemplateVO> getTemplateList(Long userId, String category) {
@@ -58,7 +59,11 @@ public class PromptTemplateServiceImpl implements PromptTemplateService {
         List<PromptTemplate> templates = templateMapper.selectList(queryWrapper);
 
         // 2. 转换为VO
-        return templates.stream().map(this::convertToVO).collect(Collectors.toList());
+        return templates.stream().map(template -> {
+            if (!Integer.valueOf(1).equals(template.getIsSystem())) return convertToVO(template);
+            var prompt = library.publishedOrNull("SYSTEM_TEMPLATE_" + template.getId());
+            return prompt == null ? null : convertToVO(template, prompt.content());
+        }).filter(java.util.Objects::nonNull).collect(Collectors.toList());
     }
 
     @Override
@@ -204,11 +209,15 @@ public class PromptTemplateServiceImpl implements PromptTemplateService {
      * @return 模板VO
      */
     private PromptTemplateVO convertToVO(PromptTemplate template) {
+        return convertToVO(template, template.getContent());
+    }
+
+    private PromptTemplateVO convertToVO(PromptTemplate template, String content) {
         return new PromptTemplateVO(
                 template.getId(),
                 template.getCategory(),
                 template.getName(),
-                template.getContent(),
+                content,
                 template.getIsSystem(),
                 template.getSortOrder(),
                 template.getCreatedAt(),

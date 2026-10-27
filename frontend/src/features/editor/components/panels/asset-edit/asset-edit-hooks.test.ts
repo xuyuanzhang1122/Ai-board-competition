@@ -8,7 +8,7 @@ import type {
 
 import type { LocalImageHistoryRecord } from '../../../store'
 import {
-  buildParsePrompt,
+  buildDescriptionRequest,
   defaultDescription,
   type DescriptionParserDeps,
   type DescriptionParserInput,
@@ -193,6 +193,7 @@ describe('asset description parser', () => {
 
     expect(result).toEqual({ description: '解析结果', parseError: false })
     expect(deps.cacheCharacterDescription).toHaveBeenCalledWith('林默', '解析结果')
+    expect(deps.generateText).toHaveBeenCalledWith({ assetType: 'character', assetName: '林默', sourceText: '剧本内容' }, 1, { model: undefined })
   })
 
   it('does not replay a failed provider request and offers a fallback description', async () => {
@@ -262,17 +263,13 @@ describe('asset description parser', () => {
     expect(result).toEqual({ description: '林默，一个角色', parseError: false })
   })
 
-  it('builds type-specific parse prompts', () => {
-    expect(buildParsePrompt('character', '林默', '剧本')).toContain('角色')
-    expect(buildParsePrompt('scene', '车站', '剧本')).toContain('场景')
-    expect(buildParsePrompt('prop', '怀表', '剧本')).toContain('道具')
+  it('sends asset type and source as data without embedding system rules', () => {
+    expect(buildDescriptionRequest('character', '林默', '剧本')).toEqual({ assetType: 'character', assetName: '林默', sourceText: '剧本' })
   })
 
-  it('truncates long source text to 2000 characters', () => {
-    const long = '剧'.repeat(3000)
-    const prompt = buildParsePrompt('character', '林默', long)
-    expect(prompt).toHaveLength(2003 + '请根据以下剧本内容，描述角色「林默」的外貌、穿着与气质：\n\n'.length)
-    expect(prompt.endsWith('...')).toBe(true)
+  it('preserves the complete source text as user data', () => {
+    const sourceText = '剧'.repeat(3000)
+    expect(buildDescriptionRequest('scene', '车站', sourceText).sourceText).toBe(sourceText)
   })
 
   it('falls back gracefully when assetName is empty', () => {

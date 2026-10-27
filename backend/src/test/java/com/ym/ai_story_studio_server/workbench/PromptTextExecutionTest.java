@@ -38,6 +38,17 @@ class PromptTextExecutionTest {
         assertThat(row.get("PROMPT_VERSION")).isEqualTo(3);
         assertThat(row.get("REQUEST_SNAPSHOT").toString()).contains("immutable template", "human text", "official-model", "maxTokens", "0.3", "0.9");
     }
+    @Test void managedDescriptionKeepsActualRenderedVariablesAndConfiguredParameters() {
+        when(provider.generateText(anyString(),anyString(),anyInt(),anyDouble(),anyDouble())).thenAnswer(call -> {
+            var request=db.queryForObject("SELECT request_snapshot FROM workbench_prompt_executions",String.class);
+            assertThat(request).contains("assetName","sourceText","projectId","0.7","0.8");
+            return new TextGenerationResult("reply","official-model","official","request",10);
+        });
+        var rendered=new ManagedPromptRenderer.Rendered("ASSET_SCENE_DESCRIPTION",2,"描述{{assetName}}：{{sourceText}}",java.util.Map.of("assetName","阁楼","sourceText","历史原文"),"TEXT","描述阁楼：历史原文");
+        assertThat(execution.generate(rendered,"official-model",1000,0.7,0.8,3L)).isEqualTo("reply");
+        assertThat(db.queryForObject("SELECT prompt_version FROM workbench_prompt_executions",Integer.class)).isEqualTo(2);
+        assertThat(db.queryForObject("SELECT request_snapshot FROM workbench_prompt_executions",String.class)).contains("描述阁楼：历史原文");
+    }
     @Test void unknownTransportErrorRetainsSnapshotWithoutRetryOrSecretError() {
         when(provider.generateText(anyString(),anyString(),anyInt(),anyDouble(),anyDouble())).thenThrow(new IllegalStateException("private upstream detail"));
         assertThatThrownBy(() -> execution.generate(template,"input","official-model",1000)).isInstanceOf(IllegalStateException.class);

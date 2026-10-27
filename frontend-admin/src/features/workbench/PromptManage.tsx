@@ -199,7 +199,7 @@ function PromptPage({ token }: { token: string }) {
             />
             <TextField
               required
-              label="能力"
+              label="能力（TEXT / IMAGE / VIDEO / MEDIA）"
               value={editor.value.capability}
               onChange={(value) => change('capability', value)}
             />

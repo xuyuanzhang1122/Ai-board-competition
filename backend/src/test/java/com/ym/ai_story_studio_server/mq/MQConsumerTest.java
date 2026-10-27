@@ -94,6 +94,7 @@ class MQConsumerTest {
     }
 
 
+    @Mock private com.ym.ai_story_studio_server.workbench.MediaPromptSnapshots mediaPrompts;
     @Mock private ImageGenerationProvider imageProvider;
     @Mock private VideoGenerationProvider videoProvider;
     @Mock private StorageService storageService;
@@ -124,14 +125,6 @@ class MQConsumerTest {
 
     @InjectMocks
     private MQConsumer consumer;
-
-    @Test
-    void propPromptFallsBackToNameWhenDescriptionIsBlank() {
-        assertThat(MQConsumer.buildPropImagePrompt("玉佩", null)).isEqualTo("玉佩");
-        assertThat(MQConsumer.buildPropImagePrompt("玉佩", "   ")).isEqualTo("玉佩");
-        assertThat(MQConsumer.buildPropImagePrompt("玉佩", "羊脂白玉雕成"))
-                .contains("玉佩", "羊脂白玉雕成", "白色背景");
-    }
 
     @Test
     void localReferenceImageUploadIsPersistedForBatchReuse() {
@@ -166,7 +159,7 @@ class MQConsumerTest {
         shot.setProjectId(14L);
         shot.setScriptText("测试分镜");
         when(storyboardShotMapper.selectById(1099L)).thenReturn(shot);
-        when(shotBindingMapper.selectList(any())).thenReturn(List.of());
+        when(mediaPrompts.load(45L,1099L)).thenReturn(frozen("accepted old prompt", "gpt-image-2-pro", "1:1", 5));
         when(imageGenerationTaskService.isJobActive(45L)).thenReturn(true);
         when(imageGenerationTaskService.isJobItemTerminal(45L, 1099L)).thenReturn(false);
         when(imageProvider.validateImageConfiguration("gpt-image-2-pro", "1:1"))
@@ -197,6 +190,7 @@ class MQConsumerTest {
         ReflectionTestUtils.invokeMethod(consumer, "executeBatchShotImageGeneration", message);
 
         verify(imageGenerationTaskService).recordSubmitted(700L, "provider-task-1");
+        verify(imageProvider).submitImageTask(eq("accepted old prompt"),eq("gpt-image-2-pro"),eq("1:1"),anyList());
         verify(mqProducer).sendImagePollDelayed(700L);
         verify(asyncImageTaskService, never()).pollImageGenerationTask(anyString(), any());
     }
@@ -204,6 +198,7 @@ class MQConsumerTest {
     @Test
     void unsupportedAspectRatioIsDeadLetteredWithoutRetry() throws Exception {
         when(imageGenerationTaskService.isJobActive(46L)).thenReturn(true);
+        when(mediaPrompts.load(46L,1100L)).thenReturn(frozen("frozen", "gpt-image-2", "21:9",5));
         when(imageProvider.validateImageConfiguration("gpt-image-2", "21:9"))
                 .thenThrow(new BusinessException(ResultCode.PARAM_INVALID, "unsupported ratio"));
         BatchTaskMessage payload = new BatchTaskMessage(
@@ -229,6 +224,7 @@ class MQConsumerTest {
         prop.setProjectId(14L);
         prop.setDisplayName("锦被");
         prop.setOverrideDescription("新制的锦被");
+        when(mediaPrompts.load(41L,253L)).thenReturn(frozen("受理时原描述", "gpt-image-2", "1:1",5));
         when(projectPropMapper.selectById(253L)).thenReturn(prop);
         when(imageProvider.generateImage(anyString(), eq("gpt-image-2"), eq("1:1"), anyList()))
                 .thenThrow(new BusinessException(ResultCode.AI_SERVICE_ERROR, "provider unavailable"));
@@ -254,17 +250,7 @@ class MQConsumerTest {
         current.setId(51L);
         current.setStatus("PENDING");
         when(jobMapper.selectById(51L)).thenReturn(current);
-        when(videoProvider.resolveVideoDuration("sd-api-2-fast-720p", 11))
-                .thenReturn(11);
-        ShotBinding sceneBinding = new ShotBinding();
-        sceneBinding.setShotId(1097L);
-        sceneBinding.setBindType("PSCENE");
-        sceneBinding.setBindId(301L);
-        ProjectScene scene = new ProjectScene();
-        scene.setId(301L);
-        scene.setThumbnailUrl("https://assets.example/scene.png");
-        when(shotBindingMapper.selectList(any())).thenReturn(List.of(sceneBinding));
-        when(projectSceneMapper.selectById(301L)).thenReturn(scene);
+        when(mediaPrompts.load(51L,1097L)).thenReturn(frozen("受理时提示词", "sd-api-2-fast-720p", "9:16",11));
 
         BatchTaskMessage message = new BatchTaskMessage(
                 51L, 1L, 14L, List.of(1097L), "ALL", 1,
@@ -280,88 +266,35 @@ class MQConsumerTest {
     }
 
     @Test
-    void batchVideoCharacterReferenceSkipsPlaceholderAndLabelsPromptByPosition() {
-        StoryboardShot shot = new StoryboardShot();
-        shot.setId(2001L);
-        shot.setProjectId(14L);
-        shot.setScriptText("沈渡与叶轻舟并肩而立");
+    void batchVideoForwardsAcceptedPromptReferencesAndParametersWithoutRebuilding() {
+        var shot=new StoryboardShot();shot.setId(2001L);shot.setProjectId(14L);shot.setScriptText("后来修改的分镜");
         when(storyboardShotMapper.selectById(2001L)).thenReturn(shot);
-        Job current = new Job();
-        current.setId(61L);
-        current.setStatus("PENDING");
-        when(jobMapper.selectById(61L)).thenReturn(current);
-        when(videoProvider.resolveVideoDuration("sd-api-2-fast-720p", 5)).thenReturn(5);
-        when(videoProvider.supportsMultipleReferenceImages("sd-api-2-fast-720p")).thenReturn(true);
+        var current=new Job();current.setId(61L);current.setStatus("PENDING");when(jobMapper.selectById(61L)).thenReturn(current);
+        var saved=new com.ym.ai_story_studio_server.workbench.MediaPromptSnapshots.Snapshot(1,"旧模板与旧分镜",List.of(),
+            java.util.Map.of("model","accepted-model","aspectRatio","9:16","duration",5,"countPerItem",1,"mode","ALL"),
+            List.of(new com.ym.ai_story_studio_server.workbench.MediaPromptSnapshots.Reference("https://example.org/a.png","角色甲")),null);
+        when(mediaPrompts.load(61L,2001L)).thenReturn(saved);
+        var message=new BatchTaskMessage(61L,1L,14L,List.of(2001L),"ALL",1,"16:9","changed-model",15);
+        ReflectionTestUtils.invokeMethod(consumer,"executeBatchVideoGeneration",message);
+        var captor=ArgumentCaptor.forClass(VideoGenerateRequest.class);
+        verify(aiVideoService).generateVideo(captor.capture(),eq(61L),eq(2001L));
+        assertThat(captor.getValue().prompt()).isEqualTo("旧模板与旧分镜");
+        assertThat(captor.getValue().referenceImageUrls()).containsExactly("https://example.org/a.png");
+        assertThat(captor.getValue().model()).isEqualTo("accepted-model");
+        assertThat(captor.getValue().duration()).isEqualTo(5);
+        verifyNoInteractions(shotBindingMapper,projectSceneMapper,projectCharacterMapper,characterLibraryMapper);
+    }
 
-        ShotBinding sceneBinding = new ShotBinding();
-        sceneBinding.setShotId(2001L);
-        sceneBinding.setBindType("PSCENE");
-        sceneBinding.setBindId(301L);
-        ProjectScene scene = new ProjectScene();
-        scene.setId(301L);
-        scene.setThumbnailUrl("https://assets.example/scene.png");
-        when(projectSceneMapper.selectById(301L)).thenReturn(scene);
+    @Test void missingAcceptanceSnapshotNeverCallsProviderOrCurrentTemplate() {
+        when(imageGenerationTaskService.isJobActive(45L)).thenReturn(true);
+        when(mediaPrompts.load(45L,1099L)).thenThrow(new BusinessException(ResultCode.CONFIG_ERROR,"缺少受理快照"));
+        var message=new BatchTaskMessage(45L,1L,14L,List.of(1099L),"ALL",1,"1:1","model");
+        org.assertj.core.api.Assertions.assertThatThrownBy(()->ReflectionTestUtils.invokeMethod(consumer,"executeBatchShotImageGeneration",message)).hasMessageContaining("快照");
+        verifyNoInteractions(imageProvider,storageService,storyboardShotMapper);
+    }
 
-        ShotBinding charBindingA = new ShotBinding();
-        charBindingA.setShotId(2001L);
-        charBindingA.setBindType("PCHAR");
-        charBindingA.setBindId(401L);
-        ShotBinding charBindingB = new ShotBinding();
-        charBindingB.setShotId(2001L);
-        charBindingB.setBindType("PCHAR");
-        charBindingB.setBindId(402L);
-
-        // 第一次调用(getBoundCharacterReferences内部按PCHAR过滤查询)只返回人物绑定；
-        // 第二次调用(buildVideoReferenceImageUrlsFromBindings取全量绑定再按类型分流)返回全部绑定。
-        when(shotBindingMapper.selectList(any())).thenReturn(
-                List.of(charBindingA, charBindingB),
-                List.of(sceneBinding, charBindingA, charBindingB));
-
-        // 角色A(沈渡)：项目角色缩略图是占位图，必须回退到角色库缩略图，不能把占位图当参考图发出去
-        ProjectCharacter characterA = new ProjectCharacter();
-        characterA.setId(401L);
-        characterA.setDisplayName("沈渡");
-        characterA.setThumbnailUrl("https://via.placeholder.com/300");
-        characterA.setLibraryCharacterId(9001L);
-
-        // 角色B(叶轻舟)：项目角色缩略图本身有效
-        ProjectCharacter characterB = new ProjectCharacter();
-        characterB.setId(402L);
-        characterB.setDisplayName("叶轻舟");
-        characterB.setThumbnailUrl("https://assets.example/yeqingzhou.png");
-
-        when(projectCharacterMapper.selectBatchIds(any())).thenReturn(List.of(characterA, characterB));
-
-        CharacterLibrary libraryCharacter = new CharacterLibrary();
-        libraryCharacter.setId(9001L);
-        libraryCharacter.setThumbnailUrl("https://assets.example/shendu-library.png");
-        when(characterLibraryMapper.selectBatchIds(any())).thenReturn(List.of(libraryCharacter));
-
-        BatchTaskMessage message = new BatchTaskMessage(
-                61L, 1L, 14L, List.of(2001L), "ALL", 1,
-                "9:16", "sd-api-2-fast-720p", 5
-        );
-        ReflectionTestUtils.invokeMethod(consumer, "executeBatchVideoGeneration", message);
-
-        ArgumentCaptor<VideoGenerateRequest> requestCaptor = ArgumentCaptor.forClass(VideoGenerateRequest.class);
-        verify(aiVideoService).generateVideo(requestCaptor.capture(), eq(61L), eq(2001L));
-        VideoGenerateRequest request = requestCaptor.getValue();
-
-        assertThat(request.referenceImageUrls())
-                .containsExactly(
-                        "https://assets.example/shendu-library.png",
-                        "https://assets.example/yeqingzhou.png",
-                        "https://assets.example/scene.png")
-                .doesNotContain("https://via.placeholder.com/300");
-        // 用途说明(人物锚定)必须在prompt最前面，@imageN编号与去重后的发送顺序一致
-        // (sudashuiapi 要求的语法，而非中文"图N")，且声明人物设定图内多视角为同一角色，
-        // 场景图也要显式标注用途
-        assertThat(request.prompt())
-                .startsWith("参考图共3张")
-                .contains("@image1 为角色\"沈渡\"的形象设定图（图中所有视角均为同一角色，并非多人）")
-                .contains("@image2 为角色\"叶轻舟\"的形象设定图")
-                .contains("@image3 为场景参考图")
-                .contains("长相、发型、服装必须严格与其对应设定图一致");
+    private static com.ym.ai_story_studio_server.workbench.MediaPromptSnapshots.Snapshot frozen(String prompt,String model,String ratio,int duration) {
+        return new com.ym.ai_story_studio_server.workbench.MediaPromptSnapshots.Snapshot(1,prompt,List.of(),java.util.Map.of("model",model,"aspectRatio",ratio,"duration",duration,"countPerItem",1,"mode","ALL"),List.of(),null);
     }
 
     private Job terminalJobUpdate() {

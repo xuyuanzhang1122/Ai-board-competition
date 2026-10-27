@@ -8,6 +8,7 @@
 // {{START_MODIFICATIONS}}
 package com.ym.ai_story_studio_server.service;
 
+import com.ym.ai_story_studio_server.workbench.MediaPromptSnapshots;
 import com.ym.ai_story_studio_server.provider.VideoGenerationProvider;
 import com.ym.ai_story_studio_server.provider.VideoTaskResult;
 import com.ym.ai_story_studio_server.common.ResultCode;
@@ -93,6 +94,7 @@ import java.util.Map;
 @Service
 @RequiredArgsConstructor
 public class AiVideoService {
+    private final MediaPromptSnapshots mediaPrompts;
 
     private final VideoGenerationProvider videoProvider;
     private final AsyncVideoTaskService asyncVideoTaskService;  // ✅ 注入独立的异步任务服务
@@ -146,37 +148,46 @@ public class AiVideoService {
         log.info("========== 开始视频生成 ==========");
         log.info("userId: {}, promptLength: {}", userId, request.prompt().length());
 
-        // 1. 应用默认配置
         AiProperties.Video videoConfig = aiProperties.getVideo();
-        // 按项目风格(styleCode: 3DGC/REALISTIC)追加固定前置提示词
-        String finalPrompt = applyStylePromptPrefix(request.projectId(), request.prompt());
-        String model = request.model() != null ? request.model() : videoConfig.getModel();
-        String aspectRatio = request.aspectRatio() != null ? request.aspectRatio() : videoConfig.getDefaultAspectRatio();
-        Integer duration = videoProvider.resolveVideoDuration(
-                model,
-                request.duration() != null ? request.duration() : videoConfig.getDefaultDuration()
-        );
-        String size = request.size();
-        if (size != null && !size.isBlank()) {
-            String mappedAspectRatio = mapSizeToAspectRatio(size);
-            if (mappedAspectRatio != null) {
-                aspectRatio = mappedAspectRatio;
+        MediaPromptSnapshots.Snapshot accepted;
+        if (parentJobId != null && shotId != null) {
+            accepted = mediaPrompts.load(parentJobId, shotId);
+            videoProvider.validateVideoModel(accepted.model());
+        } else {
+            String requestedModel = request.model() != null ? request.model() : videoConfig.getModel();
+            videoProvider.validateVideoModel(requestedModel);
+            String requestedRatio = request.aspectRatio() != null ? request.aspectRatio() : videoConfig.getDefaultAspectRatio();
+            Integer requestedDuration = videoProvider.resolveVideoDuration(requestedModel,
+                    request.duration() != null ? request.duration() : videoConfig.getDefaultDuration());
+            if (requestedDuration > videoConfig.getMaxDuration()) throw new BusinessException(ResultCode.PARAM_INVALID, "视频时长超过上限");
+            String mapped = request.size() == null ? null : mapSizeToAspectRatio(request.size());
+            if (mapped != null) requestedRatio = mapped;
+            String styleCode = null;
+            if (request.projectId() != null && request.projectId() != 0) {
+                Project project = projectMapper.selectById(request.projectId());
+                if (project == null || project.getDeletedAt() != null || !java.util.Objects.equals(project.getUserId(), userId))
+                    throw new BusinessException(ResultCode.ACCESS_DENIED);
+                styleCode = project.getStyleCode();
             }
+            var parameters = new HashMap<String,Object>();
+            parameters.put("model",requestedModel); parameters.put("aspectRatio",requestedRatio); parameters.put("duration",requestedDuration);
+            parameters.put("countPerItem",1); parameters.put("mode","ALL");
+            if (request.size() != null) parameters.put("size",request.size());
+            accepted = mediaPrompts.render("SHOT_VIDEO",Map.of("scriptText",request.prompt()),styleCode,parameters,
+                    request.referenceImageUrlList().stream().map(url -> new MediaPromptSnapshots.Reference(url,"参考图")).toList(),null);
+            if (accepted.referenceUrls().size() > 1 && !videoProvider.supportsMultipleReferenceImages(requestedModel))
+                throw new BusinessException(ResultCode.PARAM_INVALID,"当前模型不支持所选多参考图");
         }
-
-        // 验证视频时长
-        if (duration > videoConfig.getMaxDuration()) {
-            throw new BusinessException(
-                    ResultCode.PARAM_INVALID,
-                    String.format("视频时长不能超过%d秒", videoConfig.getMaxDuration())
-            );
-        }
-
-        log.debug("应用配置 - model: {}, aspectRatio: {}, duration: {}秒, size: {}", model, aspectRatio, duration, size);
+        String finalPrompt = accepted.prompt();
+        String model = accepted.model();
+        String aspectRatio = accepted.aspectRatio();
+        Integer duration = accepted.duration();
+        String size = accepted.size();
 
         // 2. ✅ 创建任务记录(MyBatis-Plus的insert会自动提交) - 修复: 传入 prompt
         Job job = createJob(userId, request.projectId(), model, aspectRatio, duration, size,
                 finalPrompt, parentJobId, shotId);
+        mediaPrompts.save(job.getId(), shotId == null ? 0L : shotId, accepted);
         log.info("✅ 任务已创建 - jobId: {}, jobType: VIDEO_GENERATION", job.getId());
 
         if (parentJobId != null && shotId != null) {
@@ -192,7 +203,7 @@ public class AiVideoService {
                     aspectRatio,
                     duration,
                     size,
-                    request.referenceImageUrlList()
+                    accepted.referenceUrls()
             );
 
             String apiTaskId = apiResponse.resolvedTaskId();
@@ -207,7 +218,7 @@ public class AiVideoService {
                 metaData.put("size", size);
                 metaData.put("prompt", finalPrompt);
                 metaData.put("apiTaskId", apiTaskId);
-                metaData.put("referenceImageUrls", request.referenceImageUrlList());
+                metaData.put("referenceImageUrls", accepted.referenceUrls());
                 metaData.put("parentJobId", parentJobId);
                 metaData.put("shotId", shotId);
                 job.setMetaJson(objectMapper.writeValueAsString(metaData));
@@ -341,17 +352,4 @@ public class AiVideoService {
         };
     }
 
-    /** 按项目 styleCode(3DGC/REALISTIC) 在 prompt 前追加对应风格的固定提示词。 */
-    private String applyStylePromptPrefix(Long projectId, String prompt) {
-        if (projectId == null) {
-            return prompt;
-        }
-        Project project = projectMapper.selectById(projectId);
-        if (project == null) {
-            return prompt;
-        }
-        String stylePrefix = aiProperties.getVideo().resolveStylePromptPrefix(project.getStyleCode());
-        return stylePrefix.isBlank() ? prompt : stylePrefix + "，" + prompt;
-    }
 }
-// {{END_MODIFICATIONS}}

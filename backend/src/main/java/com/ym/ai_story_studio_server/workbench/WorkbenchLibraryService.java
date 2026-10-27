@@ -170,13 +170,19 @@ public class WorkbenchLibraryService {
 
     /** Resolve exactly the active version; a disabled stage never falls back to old content. */
     public Prompt published(String stage) {
+        Prompt prompt = publishedOrNull(stage);
+        if (prompt == null) throw new BusinessException(ResultCode.CONFIG_ERROR, "提示词尚未发布或已禁用：" + stage);
+        return prompt;
+    }
+
+    /** Legacy picker reads omit unpublished system presets, never their mutable historical bodies. */
+    public Prompt publishedOrNull(String stage) {
         var rows = db.query("""
                 SELECT p.*,s.published_version FROM workbench_prompts p
                 JOIN workbench_prompt_stages s ON s.stage=p.stage AND s.published_version=p.version
                 WHERE p.stage=? AND p.status='PUBLISHED'
                 """, promptMapper, stage);
-        if (rows.isEmpty()) throw new BusinessException(ResultCode.CONFIG_ERROR, "提示词尚未发布或已禁用：" + stage);
-        return rows.get(0);
+        return rows.isEmpty() ? null : rows.get(0);
     }
 
     public Prompt createPrompt(PromptCreate request) {
@@ -187,8 +193,9 @@ public class WorkbenchLibraryService {
         bounded(request.variables(), 1000, "变量", false);
         bounded(request.capability(), 100, "能力", true);
         bounded(request.changeNote(), 4000, "变更说明", true);
-        require("TEXT".equals(request.capability()), "当前只支持文字能力");
+        require(capability(request.stage()).equals(request.capability()), "阶段不支持此能力");
         validateVariables(request.stage(), request.variables());
+        validatePlaceholders(request.content(), request.variables());
         return tx.execute(transaction -> {
             var stages = db.queryForList("SELECT * FROM workbench_prompt_stages WHERE stage=? FOR UPDATE",
                     request.stage());
@@ -255,13 +262,33 @@ public class WorkbenchLibraryService {
     private void validateVariables(String stage, String variables) {
         Set<String> allowed = switch (stage) {
             case "SCRIPT", "STORYBOARD" -> Set.of("brief", "confirmedScript");
+            case "STORYBOARD_PARTIAL" -> Set.of("brief", "confirmedScript", "storyboard", "shotIds", "lockedShotIds", "instruction");
             case "BRAINSTORM" -> Set.of("brief", "sources", "evidence");
             case "SHOT_PARSE", "SHOT_PARSE_ASSETS", "SHOT_PARSE_SEGMENTS" -> Set.of("rawText");
+            case "ASSET_CHARACTER_DESCRIPTION", "ASSET_SCENE_DESCRIPTION", "ASSET_PROP_DESCRIPTION" -> Set.of("assetName", "sourceText");
+            case "SHOT_IMAGE" -> Set.of("scriptText");
+            case "CHARACTER_IMAGE", "SCENE_IMAGE", "PROP_IMAGE" -> Set.of("assetName", "description");
+            case "SHOT_VIDEO" -> Set.of("scriptText");
+            case "VIDEO_REFERENCES" -> Set.of("references");
+            case "MEDIA_STYLE_3DGC", "MEDIA_STYLE_REALISTIC" -> Set.of();
             default -> Set.of();
         };
         for (String variable : value(variables).split(",")) {
             require(variable.isBlank() || allowed.contains(variable.trim()), "阶段不支持此变量：" + variable);
         }
+    }
+
+    static String capability(String stage) {
+        if (Set.of("SHOT_IMAGE", "CHARACTER_IMAGE", "SCENE_IMAGE", "PROP_IMAGE").contains(stage)) return "IMAGE";
+        if (Set.of("SHOT_VIDEO", "VIDEO_REFERENCES").contains(stage)) return "VIDEO";
+        if (stage.startsWith("MEDIA_STYLE_") || stage.startsWith("STYLE_PRESET_")) return "MEDIA";
+        return "TEXT";
+    }
+
+    private void validatePlaceholders(String content, String variables) {
+        var declared = new java.util.HashSet<>(java.util.Arrays.asList(value(variables).split(",")));
+        var matcher = java.util.regex.Pattern.compile("\\{\\{([A-Za-z][A-Za-z0-9_]*)\\}\\}").matcher(content);
+        while (matcher.find()) require(declared.stream().anyMatch(v -> v.trim().equals(matcher.group(1))), "模板含未声明变量：" + matcher.group(1));
     }
 
     private long admin() {

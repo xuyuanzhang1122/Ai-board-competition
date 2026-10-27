@@ -95,6 +95,12 @@ class WorkbenchLibraryServiceTest {
         assertThat(service.createPrompt(new PromptCreate("BRAINSTORM","new prompt","brief,sources,evidence","TEXT","actual worker keys")).variables()).isEqualTo("brief,sources,evidence");
         assertThatThrownBy(()->service.createPrompt(new PromptCreate("BRAINSTORM","new prompt","knowledge","TEXT","obsolete key"))).hasMessageContaining("变量");
     }
+    @Test void mediaStagesEnforceCapabilityAndDeclaredPlaceholders() {
+        db.update("INSERT INTO workbench_prompt_stages VALUES('SHOT_IMAGE',0,1)");
+        assertThat(service.createPrompt(new PromptCreate("SHOT_IMAGE","画面：{{scriptText}}","scriptText","IMAGE","迁移")).capability()).isEqualTo("IMAGE");
+        assertThatThrownBy(()->service.createPrompt(new PromptCreate("SHOT_IMAGE","{{credentials}}","scriptText","IMAGE","非法变量"))).hasMessageContaining("变量");
+        assertThatThrownBy(()->service.createPrompt(new PromptCreate("SHOT_IMAGE","{{scriptText}}","scriptText","TEXT","非法能力"))).hasMessageContaining("能力");
+    }
     @Test void brainstormSeedDescribesStrictDecisionAndCompleteOutline() {
         assertThat(service.published("BRAINSTORM").content()).contains("tool","arguments","search_knowledge","web_search","read_page","validate_sources","save_draft","ask_user","finish","outline","directions","selectedId","selectionReason","keyMessage","callToAction","reviewNotes","2–3");
     }

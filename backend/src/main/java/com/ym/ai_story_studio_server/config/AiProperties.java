@@ -106,29 +106,6 @@ public class AiProperties {
          */
         private Integer maxPollCount = 80;
 
-        /**
-         * 项目风格 3DGC动漫 对应的视频生成前置提示词（留空则不追加）
-         */
-        private String stylePrompt3dgc = "";
-
-        /**
-         * 项目风格 写实 对应的视频生成前置提示词（留空则不追加）
-         */
-        private String stylePromptRealistic = "";
-
-        /**
-         * 按项目风格代码解析视频生成前置提示词；未知/空风格返回空字符串。
-         */
-        public String resolveStylePromptPrefix(String styleCode) {
-            if (styleCode == null) {
-                return "";
-            }
-            return switch (styleCode.trim().toUpperCase()) {
-                case "3DGC" -> stylePrompt3dgc == null ? "" : stylePrompt3dgc;
-                case "REALISTIC" -> stylePromptRealistic == null ? "" : stylePromptRealistic;
-                default -> "";
-            };
-        }
     }
 
 }

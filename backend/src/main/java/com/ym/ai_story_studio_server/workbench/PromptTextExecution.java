@@ -26,14 +26,29 @@ public class PromptTextExecution {
 
     public String generate(WorkbenchLibraryService.Prompt template, String input, String model, int maxTokens) {
         String prompt = template.content() + "\n\n用户文案：\n" + input;
+        return execute(template.stage(),template.version(),template.content(),input,prompt,model,maxTokens,0.3,0.9,Map.of());
+    }
+
+    public String generate(ManagedPromptRenderer.Rendered rendered,String model,int maxTokens,
+                           double temperature,double topP,Long projectId) {
+        return execute(rendered.stage(),rendered.version(),rendered.template(),encode(rendered.variables()),
+                rendered.rendered(),model,maxTokens,temperature,topP,Map.of("variables",rendered.variables(),"projectId",projectId));
+    }
+
+    private String execute(String stage,int version,String template,String input,String prompt,String model,
+                           int maxTokens,double temperature,double topP,Map<String,Object> context) {
+        provider.validateModelConfiguration(model);
+        provider.validateRequest(prompt,model,maxTokens,temperature,topP);
         String id = UUID.randomUUID().toString();
-        String request = encode(Map.of("prompt", prompt, "model", model, "maxTokens", maxTokens, "temperature", 0.3, "topP", 0.9));
+        var snapshot=new java.util.HashMap<String,Object>(context);
+        snapshot.putAll(Map.of("prompt",prompt,"model",model,"maxTokens",maxTokens,"temperature",temperature,"topP",topP));
+        String request=encode(snapshot);
         audit.executeWithoutResult(s -> db.update("""
                 INSERT INTO workbench_prompt_executions(id,user_id,stage,prompt_version,prompt_snapshot,input_snapshot,request_snapshot,status)
                 VALUES(?,?,?,?,?,?,?,'RUNNING')
-                """, id, UserContext.getUserId(), template.stage(), template.version(), template.content(), input, request));
+                """, id, UserContext.getUserId(), stage, version, template, input, request));
         try {
-            var response = provider.generateText(prompt, model, maxTokens, 0.3, 0.9);
+            var response = provider.generateText(prompt, model, maxTokens, temperature, topP);
             audit.executeWithoutResult(s -> db.update("UPDATE workbench_prompt_executions SET status='SUCCEEDED',result_snapshot=?,finished_at=CURRENT_TIMESTAMP WHERE id=?", encode(response), id));
             return response.text();
         } catch (RuntimeException error) {

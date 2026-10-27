@@ -17,7 +17,7 @@ export interface DescriptionParserInput {
 export interface DescriptionParserDeps {
   cacheCharacterDescription: (name: string, description: string) => void
   generateText: (
-    prompt: string,
+    data: { assetType: EditableAssetType; assetName: string; sourceText: string },
     projectId: number,
     options?: { model?: string },
   ) => Promise<{ text: string }>
@@ -46,25 +46,11 @@ export const defaultDescription = (
   return name ? `${name}，一个${assetTypeLabel(assetType)}` : `${assetTypeLabel(assetType)}`
 }
 
-export const buildParsePrompt = (
+export const buildDescriptionRequest = (
   assetType: EditableAssetType,
   assetName: string,
   sourceText: string,
-): string => {
-  const truncated =
-    sourceText.length > 2000 ? `${sourceText.slice(0, 2000)}...` : sourceText
-  switch (assetType) {
-    case 'scene': {
-      return `请根据以下剧本内容，描述场景「${assetName}」的环境与氛围：\n\n${truncated}`
-    }
-    case 'prop': {
-      return `请根据以下剧本内容，描述道具「${assetName}」的外观与细节：\n\n${truncated}`
-    }
-    case 'character': {
-      return `请根据以下剧本内容，描述角色「${assetName}」的外貌、穿着与气质：\n\n${truncated}`
-    }
-  }
-}
+) => ({ assetType, assetName, sourceText })
 
 export const runDescriptionParse = async (
   input: DescriptionParserInput,
@@ -102,7 +88,7 @@ export const runDescriptionParse = async (
     if (cached) return { description: cached, parseError: false }
   }
 
-  const prompt = buildParsePrompt(assetType, currentName, currentScriptText)
+  const prompt = buildDescriptionRequest(assetType, currentName, currentScriptText)
 
   // Let immediate effect cleanup cancel this dispatch before React replays setup in development.
   await Promise.resolve()
@@ -128,7 +114,7 @@ const createDefaultDeps = (): DescriptionParserDeps => ({
     useEditorStore.getState().cacheCharacterDescription(name, description)
   },
   generateText: (prompt, projectId, options) =>
-    textGenerationApi.generateText(prompt, projectId, options),
+    textGenerationApi.describeAsset(prompt, projectId, options),
   getCachedCharacterDescription: (name) =>
     useEditorStore.getState().characterDescriptionCache.get(name),
 })

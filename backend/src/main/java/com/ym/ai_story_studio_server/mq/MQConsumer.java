@@ -1,5 +1,6 @@
 package com.ym.ai_story_studio_server.mq;
 
+import com.ym.ai_story_studio_server.workbench.MediaPromptSnapshots;
 import com.ym.ai_story_studio_server.provider.ImageGenerationProvider;
 import com.ym.ai_story_studio_server.provider.ImageGenerationResult;
 import com.ym.ai_story_studio_server.provider.ImageTaskResult;
@@ -7,33 +8,24 @@ import com.ym.ai_story_studio_server.provider.VideoGenerationProvider;
 import com.ym.ai_story_studio_server.provider.VideoTaskResult;
 import com.rabbitmq.client.Channel;
 
-import com.ym.ai_story_studio_server.config.AiProperties;
 import com.ym.ai_story_studio_server.dto.ai.VideoGenerateRequest;
 import com.ym.ai_story_studio_server.entity.Job;
 import com.ym.ai_story_studio_server.exception.BusinessException;
 import com.ym.ai_story_studio_server.exception.RetryableAiException;
 import com.ym.ai_story_studio_server.entity.CharacterLibrary;
-import com.ym.ai_story_studio_server.entity.AssetRef;
-import com.ym.ai_story_studio_server.entity.AssetVersion;
-import com.ym.ai_story_studio_server.entity.Project;
 import com.ym.ai_story_studio_server.entity.ProjectCharacter;
 import com.ym.ai_story_studio_server.entity.ProjectScene;
 import com.ym.ai_story_studio_server.entity.PropLibrary;
 import com.ym.ai_story_studio_server.entity.ProjectProp;
 import com.ym.ai_story_studio_server.entity.SceneLibrary;
-import com.ym.ai_story_studio_server.entity.ShotBinding;
 import com.ym.ai_story_studio_server.mapper.AssetMapper;
-import com.ym.ai_story_studio_server.mapper.AssetRefMapper;
-import com.ym.ai_story_studio_server.mapper.AssetVersionMapper;
 import com.ym.ai_story_studio_server.mapper.CharacterLibraryMapper;
 import com.ym.ai_story_studio_server.mapper.JobMapper;
 import com.ym.ai_story_studio_server.mapper.ProjectCharacterMapper;
-import com.ym.ai_story_studio_server.mapper.ProjectMapper;
 import com.ym.ai_story_studio_server.mapper.ProjectSceneMapper;
 import com.ym.ai_story_studio_server.mapper.PropLibraryMapper;
 import com.ym.ai_story_studio_server.mapper.ProjectPropMapper;
 import com.ym.ai_story_studio_server.mapper.SceneLibraryMapper;
-import com.ym.ai_story_studio_server.mapper.ShotBindingMapper;
 import com.ym.ai_story_studio_server.mapper.StoryboardShotMapper;
 import com.ym.ai_story_studio_server.service.AiTextService;
 import com.ym.ai_story_studio_server.service.AiVideoService;
@@ -44,7 +36,6 @@ import com.ym.ai_story_studio_server.service.AsyncVideoTaskService;
 import com.ym.ai_story_studio_server.service.AssetCreationService;
 import com.ym.ai_story_studio_server.service.ChargingService;
 import com.ym.ai_story_studio_server.service.StorageService;
-import com.ym.ai_story_studio_server.util.ImageMergeUtil;
 import com.ym.ai_story_studio_server.util.UserContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -60,7 +51,6 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -78,6 +68,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 @Component
 @RequiredArgsConstructor
 public class MQConsumer {
+    private final MediaPromptSnapshots mediaPrompts;
 
     private final ImageGenerationProvider imageProvider;
     private final VideoGenerationProvider videoProvider;
@@ -91,35 +82,16 @@ public class MQConsumer {
     private final ImageReferenceUploadService imageReferenceUploadService;
     private final MQProducer mqProducer;
     private final AiTextService aiTextService;
-    private final ImageMergeUtil imageMergeUtil;
     private final JobMapper jobMapper;
-    private final AiProperties aiProperties;
     private final AssetMapper assetMapper;
-    private final AssetRefMapper assetRefMapper;
-    private final AssetVersionMapper assetVersionMapper;
     private final StoryboardShotMapper storyboardShotMapper;
-    private final ProjectMapper projectMapper;
     private final ProjectCharacterMapper projectCharacterMapper;
     private final CharacterLibraryMapper characterLibraryMapper;
     private final ProjectSceneMapper projectSceneMapper;
     private final PropLibraryMapper propLibraryMapper;
     private final ProjectPropMapper projectPropMapper;
     private final SceneLibraryMapper sceneLibraryMapper;
-    private final ShotBindingMapper shotBindingMapper;
     private final ObjectMapper objectMapper;
-
-    /** 视频生成内嵌规则，与前端单分镜面板的前缀保持一致；最终 prompt = 内嵌规则 + 分镜词。 */
-    private static final String VIDEO_PROMPT_PREFIX =
-            "根据参考图的角色、场景和道具设定生成风格一致的视频。动作与运镜合理，无字幕和 BGM；"
-                    + "没有台词时人物不说话。画面清晰、光影自然，第一个镜头保留 0.3 秒空境，忠实呈现以下分镜：";
-
-    /** 人物照片资产生成的固定前置规则：统一背景/画质/排版要求，最终 prompt = 该前置规则 + 角色描述。 */
-    private static final String CHARACTER_PORTRAIT_PROMPT_PREFIX =
-            "纯白极简背景，无文字，同一人物统一造型服饰，中国人像:1.3，超写实摄影:1.3, 单反拍摄, "
-                    + "85mm人像镜头, f/1.8大光圈, 高清细节, 皮肤呈现真实细腻质感，不过度磨皮， 自然毛孔, "
-                    + "绒毛, 皮下血管, 自然肤质, 柔光, 自然光, 真实光影, 浅景深, 专业肖像, 电影质感, "
-                    + "锐度清晰, 真实质感, 照片级。人物表情自然，严禁手上携带物品，排版要求，比例协调，"
-                    + "人物四视图排版，左侧展示人物上半身正面特写，右侧正面全身立绘，侧面全身立绘，背面全身立绘";
 
     /**
      * 消费批量生成分镜图任务
@@ -387,11 +359,10 @@ public class MQConsumer {
         }
 
         // 应用配置
-        String finalModel = msg.model() != null ? msg.model() : aiProperties.getImage().getDefaultModel();
-        String finalAspectRatio = imageProvider.validateImageConfiguration(
-                finalModel,
-                msg.aspectRatio() != null ? msg.aspectRatio() : aiProperties.getImage().getDefaultAspectRatio());
-        List<String> referenceImageUrls = prepareReferenceImagesForUpstream(jobId, msg.referenceImageUrls());
+        var accepted = mediaPrompts.load(jobId, shotId);
+        String finalModel = accepted.model();
+        String finalAspectRatio = imageProvider.validateImageConfiguration(finalModel, accepted.aspectRatio());
+        List<String> referenceImageUrls = prepareReferenceImagesForUpstream(jobId, accepted.referenceUrls());
 
         log.info("执行单个分镜图生成 - jobId: {}, shotId: {}, customPrompt: {}, referenceImageUrls: {}",
                 jobId, shotId, customPrompt != null ? "[自定义内容]" : "使用分镜剧本",
@@ -408,9 +379,7 @@ public class MQConsumer {
             }
     
             // 2. 准备prompt: 优先使用customPrompt，否则使用分镜剧本 + 内嵌规则
-            String scriptText = shot.getScriptText() != null ? shot.getScriptText() : 
-                          "为分镜生成图片 - shotId: " + shotId;
-            String prompt = customPrompt != null ? customPrompt : buildShotImagePrompt(scriptText);
+            String prompt = accepted.prompt();
     
             // 日志中不显示完整的内嵌提示词，只显示用户自定义部分
             String logPrompt = customPrompt != null ? "[自定义内容]" : prompt;
@@ -489,10 +458,11 @@ public class MQConsumer {
             return;
         }
 
-        String finalModel = msg.getModel() != null ? msg.getModel() : aiProperties.getImage().getDefaultModel();
-        String finalAspectRatio = imageProvider.validateImageConfiguration(
-                finalModel,
-                msg.getAspectRatio() != null ? msg.getAspectRatio() : aiProperties.getImage().getDefaultAspectRatio());
+        var accepted = mediaPrompts.load(jobId, shotIds.get(0));
+        String finalModel = accepted.model();
+        String finalAspectRatio = imageProvider.validateImageConfiguration(finalModel, accepted.aspectRatio());
+        countPerItem = ((Number) accepted.parameters().get("countPerItem")).intValue();
+        mode = (String) accepted.parameters().get("mode");
 
         updateJobRunning(jobId);
 
@@ -530,13 +500,11 @@ public class MQConsumer {
                     }
                 }
 
-                String scriptText = shot.getScriptText() != null ? shot.getScriptText() :
-                               "为分镜生成图片 - shotId: " + shotId;
-                String prompt = buildShotImagePrompt(scriptText);
+                    String prompt = mediaPrompts.load(jobId, shotId).prompt();
 
                 // 查询分镜绑定的角色图片作为参考图
                 List<String> referenceImageUrls = prepareReferenceImagesForUpstream(
-                        jobId, getBoundCharacterImages(shotId));
+                        jobId, mediaPrompts.load(jobId, shotId).referenceUrls());
                 log.info("分镜绑定的角色图片数量 - shotId: {}, count: {}", shotId, referenceImageUrls.size());
 
                 if (allHttpUrls(referenceImageUrls) && imageProvider.supportsAsyncImageTask(finalModel)) {
@@ -640,14 +608,11 @@ public class MQConsumer {
 
         updateJobRunning(jobId);
 
-        String finalAspectRatio = msg.getAspectRatio() != null ? msg.getAspectRatio() :
-                aiProperties.getVideo().getDefaultAspectRatio();
-        String finalModel = msg.getModel() != null ? msg.getModel() :
-                aiProperties.getVideo().getModel();
-        Integer finalDuration = videoProvider.resolveVideoDuration(
-                finalModel,
-                msg.getDuration() != null ? msg.getDuration() : aiProperties.getVideo().getDefaultDuration()
-        );
+        var accepted = mediaPrompts.load(jobId, shotIds.get(0));
+        String finalAspectRatio = accepted.aspectRatio();
+        String finalModel = accepted.model();
+        Integer finalDuration = accepted.duration();
+        videoProvider.validateVideoModel(finalModel);
 
         AtomicInteger submittedCount = new AtomicInteger(0);
 
@@ -663,37 +628,9 @@ public class MQConsumer {
                     continue;
                 }
 
-                String scriptText = shot.getScriptText() != null ? shot.getScriptText() :
-                               "为分镜生成视频 - shotId: " + shotId;
-
-                // 人物参考图：按绑定顺序解析姓名+URL，与道具/场景/分镜图一起组装成带用途标注的
-                // 参考图列表；编号在URL去重之后生成，保证prompt里的"图N"与实际发送顺序严格一致。
-                List<CharacterReference> characterReferences = getBoundCharacterReferences(shotId);
-                List<LabeledReference> labeledReferences;
-                try {
-                    labeledReferences = buildLabeledVideoReferencesFromBindings(shotId, characterReferences);
-                } catch (BusinessException e) {
-                    log.warn("分镜缺少场景画像资产，禁止生成视频 - shotId: {}", shotId);
-                    asyncVideoTaskService.markParentItemFailed(jobId, shotId, e.getMessage());
-                    continue;
-                }
-                List<String> referenceImageUrls = labeledReferences.stream()
-                        .map(LabeledReference::url)
-                        .toList();
-
-                // Seedance 2.0 对prompt前段加权最高，参考图用途说明(人物锚定)必须放在最前，
-                // 其后才是通用内嵌规则和分镜词。
-                String usagePrompt = buildVideoReferenceUsagePrompt(labeledReferences);
-
-                // 当前四个 Seedance 模型保留完整多参考列表；兼容未来单参考模型时再合并。
-                if (referenceImageUrls.size() > 1
-                        && !videoProvider.supportsMultipleReferenceImages(finalModel)) {
-                    referenceImageUrls = List.of(mergeReferenceImagesToSingleUrl(referenceImageUrls));
-                    // 多图已拼成一张，"图N"编号不再成立
-                    usagePrompt = "";
-                }
-
-                String prompt = usagePrompt + VIDEO_PROMPT_PREFIX + scriptText;
+                var snapshot = mediaPrompts.load(jobId, shotId);
+                List<String> referenceImageUrls = snapshot.referenceUrls();
+                String prompt = snapshot.prompt();
 
                 VideoGenerateRequest request = new VideoGenerateRequest(
                         prompt,
@@ -751,13 +688,12 @@ public class MQConsumer {
         asyncVideoTaskService.markParentItemRunning(jobId, shotId);
 
         // 应用配置
-        String finalAspectRatio = aspectRatio != null ? aspectRatio :
-                aiProperties.getVideo().getDefaultAspectRatio();
-        String finalModel = model != null ? model : aiProperties.getVideo().getModel();
-        Integer finalDuration = videoProvider.resolveVideoDuration(
-                finalModel,
-                duration != null ? duration : aiProperties.getVideo().getDefaultDuration()
-        );
+        var accepted = mediaPrompts.load(jobId, shotId);
+        String finalAspectRatio = accepted.aspectRatio();
+        String finalModel = accepted.model();
+        Integer finalDuration = accepted.duration();
+        size = accepted.size();
+        videoProvider.validateVideoModel(finalModel);
 
         log.info("应用配置 - aspectRatio: {}, model: {}, duration: {}, size: {}", finalAspectRatio, finalModel, finalDuration, size);
 
@@ -768,45 +704,8 @@ public class MQConsumer {
                 throw new BusinessException(com.ym.ai_story_studio_server.common.ResultCode.SHOT_NOT_FOUND);
             }
 
-            // 2. 分镜图资产：优先使用消息携带的URL，缺省时回退查询分镜当前图片
-            if (referenceImageUrl == null || referenceImageUrl.isBlank()) {
-                // 查询分镜当前图片资产
-                AssetRef currentImageRef = assetRefMapper.selectOne(
-                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<AssetRef>()
-                        .eq(AssetRef::getRefType, "SHOT_IMG_CURRENT")
-                        .eq(AssetRef::getRefOwnerId, shotId)
-                );
-
-                if (currentImageRef != null) {
-                    // 查询资产版本获取URL
-                    AssetVersion assetVersion = assetVersionMapper.selectById(currentImageRef.getAssetVersionId());
-                    if (assetVersion != null && assetVersion.getUrl() != null) {
-                        referenceImageUrl = assetVersion.getUrl();
-                        log.info("未提供分镜图资产，使用分镜当前图片 - shotId: {}, imageUrl: {}", shotId, referenceImageUrl);
-                    }
-                }
-            }
-
-            // 3. 组装多参考图：人物资产 + 道具资产 + 场景资产(强制) + 分镜图资产
-            List<LabeledReference> labeledReferences = buildLabeledVideoReferences(msg, referenceImageUrl);
-            List<String> referenceImageUrls = labeledReferences.stream()
-                    .map(LabeledReference::url)
-                    .toList();
-            String usagePrompt = buildVideoReferenceUsagePrompt(labeledReferences);
-
-            // 当前四个 Seedance 模型保留完整多参考列表；兼容未来单参考模型时再合并。
-            if (referenceImageUrls.size() > 1
-                    && !videoProvider.supportsMultipleReferenceImages(finalModel)) {
-                referenceImageUrls = List.of(mergeReferenceImagesToSingleUrl(referenceImageUrls));
-                // 多图已拼成一张，"图N"编号不再成立
-                usagePrompt = "";
-            }
-
-            // 4. 准备 prompt：参考图用途说明(人物锚定，放最前) + 分镜词 + 按项目风格追加前置提示词
-            String finalPrompt = prompt != null ? prompt :
-                    (shot.getScriptText() != null ? shot.getScriptText() :
-                            "为分镜生成视频 - shotId: " + shotId);
-            finalPrompt = applyStylePromptPrefix(projectId, usagePrompt + finalPrompt);
+            List<String> referenceImageUrls = accepted.referenceUrls();
+            String finalPrompt = accepted.prompt();
 
             log.info("调用AI生成视频 - shotId: {}, promptLength: {}, referenceImageCount: {}",
                     shotId, finalPrompt.length(), referenceImageUrls.size());
@@ -873,271 +772,6 @@ public class MQConsumer {
         }
     }
 
-    /** 一张视频参考图及其在prompt"图N"用途说明中的角色定位。 */
-    private record LabeledReference(String description, String url, boolean isCharacter) {}
-
-    /** 人物设定图是四视图拼合图，必须显式告知模型"图内多个视角是同一角色"，否则会被当成多个人物导致ID漂移。 */
-    private static LabeledReference characterReference(String name, String url) {
-        return new LabeledReference(
-                "角色\"" + name + "\"的形象设定图（图中所有视角均为同一角色，并非多人）", url, true);
-    }
-
-    /**
-     * 组装视频生成的多参考图列表：人物资产 → 道具资产 → 场景资产 → 分镜图资产。
-     *
-     * <p>单分镜链路使用，资产信息来自消息体。场景画像资产为强制项，解析不到可用图片时
-     * 直接抛出异常终止任务。返回列表已按URL去重（保留首次出现），"图N"编号以该列表为准。
-     */
-    private List<LabeledReference> buildLabeledVideoReferences(SingleShotVideoMessage msg, String shotImageUrl) {
-        List<LabeledReference> references = new ArrayList<>();
-
-        if (msg.getCharacters() != null) {
-            for (var character : msg.getCharacters()) {
-                String name = character.name() != null ? character.name() : ("角色" + character.id());
-                String url = isValidReferenceUrl(character.thumbnailUrl())
-                        ? character.thumbnailUrl()
-                        : resolveCharacterThumbnail(character.id());
-                if (isValidReferenceUrl(url)) {
-                    references.add(characterReference(name, url));
-                }
-            }
-        }
-
-        if (msg.getProps() != null) {
-            for (var prop : msg.getProps()) {
-                String name = prop.name() != null ? prop.name() : "道具";
-                String url = isValidReferenceUrl(prop.thumbnailUrl())
-                        ? prop.thumbnailUrl()
-                        : resolvePropThumbnail(prop.id());
-                if (isValidReferenceUrl(url)) {
-                    references.add(new LabeledReference("道具\"" + name + "\"的参考图", url, false));
-                }
-            }
-        }
-
-        String sceneImageUrl = null;
-        if (msg.getScene() != null) {
-            sceneImageUrl = isValidReferenceUrl(msg.getScene().thumbnailUrl())
-                    ? msg.getScene().thumbnailUrl()
-                    : resolveSceneThumbnail(msg.getScene().id());
-        }
-        appendSceneAndShotReferences(references, sceneImageUrl, shotImageUrl);
-        return dedupByUrl(references);
-    }
-
-    /**
-     * 从分镜绑定关系与资产系统解析视频多参考图：人物资产 → 道具资产 → 场景资产(强制) → 分镜图资产。
-     *
-     * <p>批量视频链路使用；缺少场景画像资产时抛出异常，由调用方将该分镜标记失败。
-     *
-     * @param characterReferences 调用方已解析好的人物参考图（姓名+URL，与查库顺序一致，
-     *                            避免重复查库、且保证顺序与prompt用途说明完全一致）
-     */
-    private List<LabeledReference> buildLabeledVideoReferencesFromBindings(
-            Long shotId, List<CharacterReference> characterReferences) {
-        List<LabeledReference> references = new ArrayList<>();
-        for (CharacterReference character : characterReferences) {
-            references.add(characterReference(character.name(), character.url()));
-        }
-
-        List<ShotBinding> bindings = shotBindingMapper.selectList(
-                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<ShotBinding>()
-                        .eq(ShotBinding::getShotId, shotId));
-
-        // 道具画像
-        for (ShotBinding binding : bindings) {
-            if (!"PPROP".equals(binding.getBindType())) {
-                continue;
-            }
-            String propThumbnail = resolvePropThumbnail(binding.getBindId());
-            if (isValidReferenceUrl(propThumbnail)) {
-                ProjectProp projectProp = projectPropMapper.selectById(binding.getBindId());
-                String propName = projectProp != null && projectProp.getDisplayName() != null
-                        ? projectProp.getDisplayName() : "道具";
-                references.add(new LabeledReference("道具\"" + propName + "\"的参考图", propThumbnail, false));
-            }
-        }
-
-        // 场景画像（强制）
-        String sceneImageUrl = null;
-        for (ShotBinding binding : bindings) {
-            if (!"PSCENE".equals(binding.getBindType())) {
-                continue;
-            }
-            String sceneThumbnail = resolveSceneThumbnail(binding.getBindId());
-            if (isValidReferenceUrl(sceneThumbnail)) {
-                sceneImageUrl = sceneThumbnail;
-                break;
-            }
-        }
-        appendSceneAndShotReferences(references, sceneImageUrl, resolveShotCurrentImageUrl(shotId));
-        return dedupByUrl(references);
-    }
-
-    /** 追加场景(强制，缺失抛异常)与分镜图参考；两条视频链路共用的收尾逻辑。 */
-    private void appendSceneAndShotReferences(
-            List<LabeledReference> references, String sceneImageUrl, String shotImageUrl) {
-        if (!isValidReferenceUrl(sceneImageUrl)) {
-            throw new BusinessException(
-                    com.ym.ai_story_studio_server.common.ResultCode.PARAM_INVALID,
-                    "缺少场景画像资产，禁止生成视频");
-        }
-        references.add(new LabeledReference("场景参考图，画面环境须与其保持一致", sceneImageUrl, false));
-
-        if (isValidReferenceUrl(shotImageUrl)) {
-            references.add(new LabeledReference(
-                    "本分镜的画面参考图（仅参考构图与人物站位，人物样貌以各角色设定图为准）", shotImageUrl, false));
-        }
-    }
-
-    /** 按URL去重（保留首次出现），去重必须发生在"图N"编号生成之前，否则编号会错位。 */
-    private List<LabeledReference> dedupByUrl(List<LabeledReference> references) {
-        List<LabeledReference> deduped = new ArrayList<>();
-        java.util.Set<String> seenUrls = new HashSet<>();
-        for (LabeledReference reference : references) {
-            if (seenUrls.add(reference.url())) {
-                deduped.add(reference);
-            }
-        }
-        return deduped;
-    }
-
-    /** 查询分镜当前图片资产(分镜图)的URL。 */
-    private String resolveShotCurrentImageUrl(Long shotId) {
-        AssetRef currentImageRef = assetRefMapper.selectOne(
-                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<AssetRef>()
-                        .eq(AssetRef::getRefType, "SHOT_IMG_CURRENT")
-                        .eq(AssetRef::getRefOwnerId, shotId));
-        if (currentImageRef == null) {
-            return null;
-        }
-        AssetVersion assetVersion = assetVersionMapper.selectById(currentImageRef.getAssetVersionId());
-        return assetVersion != null ? assetVersion.getUrl() : null;
-    }
-
-    /** 兼容仅支持单参考图的未来模型；当前四个 Seedance 模型保留完整多参考列表。 */
-    private String mergeReferenceImagesToSingleUrl(List<String> imageUrls) {
-        try {
-            byte[] mergedImageBytes = imageMergeUtil.mergeImagesHorizontally(imageUrls);
-            String mergedUrl = storageService.uploadImageBytes(
-                    mergedImageBytes,
-                    "merged_video_ref_" + System.currentTimeMillis() + ".png"
-            );
-            log.info("参考图已拼接并上传: {}", mergedUrl);
-            return mergedUrl;
-        } catch (Exception e) {
-            log.warn("参考图拼接失败，回退到首张参考图: {}", e.getMessage());
-            return imageUrls.get(0);
-        }
-    }
-
-    private boolean isValidReferenceUrl(String url) {
-        if (url == null || url.isBlank()) {
-            return false;
-        }
-        return !url.contains("via.placeholder.com");
-    }
-
-    /**
-     * 生成"@imageN为XX"的参考图用途说明，放在视频prompt最前面。
-     *
-     * <p>保留业务参考图顺序说明；新供应商适配时必须重新核验标签和多图语义，
-     * 当前媒体 provider 不可用，不能据此推断任一官方模型支持此格式。
-     */
-    private String buildVideoReferenceUsagePrompt(List<LabeledReference> references) {
-        if (references.isEmpty()) {
-            return "";
-        }
-        StringBuilder sb = new StringBuilder("参考图共").append(references.size()).append("张，按顺序：");
-        boolean hasCharacter = false;
-        for (int i = 0; i < references.size(); i++) {
-            if (i > 0) {
-                sb.append("；");
-            }
-            sb.append(" @image").append(i + 1).append(" 为").append(references.get(i).description());
-            hasCharacter |= references.get(i).isCharacter();
-        }
-        sb.append("。");
-        if (hasCharacter) {
-            sb.append("生成画面中各角色的长相、发型、服装必须严格与其对应设定图一致，不同角色之间不得混淆样貌。");
-        }
-        return sb.toString();
-    }
-
-    /**
-     * 按项目 styleCode(3DGC/REALISTIC) 在 prompt 前追加对应风格的固定提示词。
-     *
-     * <p>仅用于绕开 {@link AiVideoService#generateVideo} 直接调用 {@link VideoGenerationProvider} 的
-     * 单分镜视频旧链路({@link #executeSingleShotVideoGeneration});批量链路的风格前缀已经在
-     * {@code AiVideoService.generateVideo} 内统一应用，不要在 {@link #executeBatchVideoGeneration}
-     * 里重复调用，否则会叠加两次。
-     */
-    private String applyStylePromptPrefix(Long projectId, String prompt) {
-        if (projectId == null) {
-            return prompt;
-        }
-        Project project = projectMapper.selectById(projectId);
-        if (project == null) {
-            return prompt;
-        }
-        String stylePrefix = aiProperties.getVideo().resolveStylePromptPrefix(project.getStyleCode());
-        return stylePrefix.isBlank() ? prompt : stylePrefix + "，" + prompt;
-    }
-
-    private String resolveSceneThumbnail(Long projectSceneId) {
-        if (projectSceneId == null) {
-            return null;
-        }
-        ProjectScene projectScene = projectSceneMapper.selectById(projectSceneId);
-        if (projectScene == null) {
-            return null;
-        }
-        if (isValidReferenceUrl(projectScene.getThumbnailUrl())) {
-            return projectScene.getThumbnailUrl();
-        }
-        if (projectScene.getLibrarySceneId() == null) {
-            return null;
-        }
-        SceneLibrary sceneLibrary = sceneLibraryMapper.selectById(projectScene.getLibrarySceneId());
-        return sceneLibrary != null ? sceneLibrary.getThumbnailUrl() : null;
-    }
-
-    private String resolveCharacterThumbnail(Long projectCharacterId) {
-        if (projectCharacterId == null) {
-            return null;
-        }
-        ProjectCharacter projectCharacter = projectCharacterMapper.selectById(projectCharacterId);
-        if (projectCharacter == null) {
-            return null;
-        }
-        if (isValidReferenceUrl(projectCharacter.getThumbnailUrl())) {
-            return projectCharacter.getThumbnailUrl();
-        }
-        if (projectCharacter.getLibraryCharacterId() == null) {
-            return null;
-        }
-        CharacterLibrary characterLibrary = characterLibraryMapper.selectById(projectCharacter.getLibraryCharacterId());
-        return characterLibrary != null ? characterLibrary.getThumbnailUrl() : null;
-    }
-
-    private String resolvePropThumbnail(Long projectPropId) {
-        if (projectPropId == null) {
-            return null;
-        }
-        ProjectProp projectProp = projectPropMapper.selectById(projectPropId);
-        if (projectProp == null) {
-            return null;
-        }
-        if (projectProp.getThumbnailUrl() != null && !projectProp.getThumbnailUrl().isBlank()) {
-            return projectProp.getThumbnailUrl();
-        }
-        if (projectProp.getLibraryPropId() == null) {
-            return null;
-        }
-        PropLibrary propLibrary = propLibraryMapper.selectById(projectProp.getLibraryPropId());
-        return propLibrary != null ? propLibrary.getThumbnailUrl() : null;
-    }
-
     private void executeBatchCharacterImageGeneration(BatchTaskMessage msg) {
         Long jobId = msg.getJobId();
         List<Long> characterIds = msg.getTargetIds(); // 这是 project_character 的 ID
@@ -1147,8 +781,10 @@ public class MQConsumer {
         log.info("执行批量角色画像生成 - jobId: {}, characterCount: {}", jobId, characterIds.size());
         updateJobRunning(jobId);
 
-        String finalAspectRatio = msg.getAspectRatio() != null ? msg.getAspectRatio() : "1:1";
-        String finalModel = msg.getModel() != null ? msg.getModel() : aiProperties.getImage().getDefaultModel();
+        var accepted = mediaPrompts.load(jobId, characterIds.get(0));
+        String finalAspectRatio = accepted.aspectRatio();
+        String finalModel = accepted.model();
+        imageProvider.validateImageConfiguration(finalModel, finalAspectRatio);
 
         AtomicInteger successCount = new AtomicInteger(0);
         AtomicInteger failCount = new AtomicInteger(0);
@@ -1181,7 +817,7 @@ public class MQConsumer {
                 // 3. MISSING模式：检查是否已有图片
                 String existingThumbnail = isCustomCharacter ? 
                         projectCharacter.getThumbnailUrl() : character.getThumbnailUrl();
-                if ("MISSING".equals(msg.getMode()) && existingThumbnail != null && !existingThumbnail.isEmpty()) {
+                if ("MISSING".equals(accepted.parameters().get("mode")) && existingThumbnail != null && !existingThumbnail.isEmpty()) {
                     log.info("MISSING模式 - 角色已有图片,跳过 - projectCharacterId: {}", projectCharacterId);
                     successCount.incrementAndGet();
                     continue;
@@ -1205,16 +841,7 @@ public class MQConsumer {
                 }
                 
                 // 构建优化的提示词：固定前置规则 + 强调角色特征（年龄、性别、外貌、服装）
-                String prompt;
-                if (description != null && !description.trim().isEmpty()) {
-                    // 有AI分析描述：直接使用描述作为主要提示词
-                    prompt = String.format("%s，角色立绘，%s，高质量，精细绘制，全身像，正面站立，面向镜头",
-                            CHARACTER_PORTRAIT_PROMPT_PREFIX, description.trim());
-                } else {
-                    // 无描述：使用角色名称
-                    prompt = String.format("%s，角色立绘，%s，高质量，精细绘制，全身像，正面站立",
-                            CHARACTER_PORTRAIT_PROMPT_PREFIX, characterName);
-                }
+                String prompt = mediaPrompts.load(jobId, projectCharacterId).prompt();
 
                 log.info("生成角色图片 - projectCharacterId: {}, name: {}, prompt: {}", projectCharacterId, characterName, prompt);
 
@@ -1321,8 +948,10 @@ public class MQConsumer {
         log.info("执行批量场景画像生成 - jobId: {}, sceneCount: {}", jobId, sceneIds.size());
         updateJobRunning(jobId);
 
-        String finalAspectRatio = msg.getAspectRatio() != null ? msg.getAspectRatio() : "16:9";
-        String finalModel = msg.getModel() != null ? msg.getModel() : aiProperties.getImage().getDefaultModel();
+        var accepted = mediaPrompts.load(jobId, sceneIds.get(0));
+        String finalAspectRatio = accepted.aspectRatio();
+        String finalModel = accepted.model();
+        imageProvider.validateImageConfiguration(finalModel, finalAspectRatio);
 
         AtomicInteger successCount = new AtomicInteger(0);
         AtomicInteger failCount = new AtomicInteger(0);
@@ -1366,15 +995,14 @@ public class MQConsumer {
                 if (existingThumbnail == null && scene != null) {
                     existingThumbnail = scene.getThumbnailUrl();
                 }
-                if ("MISSING".equals(msg.getMode()) && existingThumbnail != null) {
+                if ("MISSING".equals(accepted.parameters().get("mode")) && existingThumbnail != null) {
                     log.info("MISSING模式 - 场景已有图片,跳过 - projectSceneId: {}", projectSceneId);
                     successCount.incrementAndGet();
                     continue;
                 }
 
                 // 5. 构建提示词：使用场景描述生成场景图
-                String prompt = String.format("纯场景背景图，%s，%s，高质量高清，画质细腻，空无一人的场景，禁止出现任何人物、角色、人影、动物，只有纯背景环境",
-                        sceneName, description != null ? description : "");
+                String prompt = mediaPrompts.load(jobId, projectSceneId).prompt();
 
                 log.info("生成场景图片 - projectSceneId: {}, name: {}, prompt: {}", projectSceneId, sceneName, prompt);
 
@@ -1465,8 +1093,10 @@ public class MQConsumer {
         log.info("执行批量道具画像生成 - jobId: {}, propCount: {}", jobId, propIds.size());
         updateJobRunning(jobId);
 
-        String finalAspectRatio = msg.getAspectRatio() != null ? msg.getAspectRatio() : "1:1";
-        String finalModel = msg.getModel() != null ? msg.getModel() : aiProperties.getImage().getDefaultModel();
+        var accepted = mediaPrompts.load(jobId, propIds.get(0));
+        String finalAspectRatio = accepted.aspectRatio();
+        String finalModel = accepted.model();
+        imageProvider.validateImageConfiguration(finalModel, finalAspectRatio);
 
         AtomicInteger successCount = new AtomicInteger(0);
         AtomicInteger failCount = new AtomicInteger(0);
@@ -1504,7 +1134,7 @@ public class MQConsumer {
                 if ((existingThumbnail == null || existingThumbnail.isBlank()) && prop != null) {
                     existingThumbnail = prop.getThumbnailUrl();
                 }
-                if ("MISSING".equals(msg.getMode()) && existingThumbnail != null && !existingThumbnail.isBlank()) {
+                if ("MISSING".equals(accepted.parameters().get("mode")) && existingThumbnail != null && !existingThumbnail.isBlank()) {
                     log.info("MISSING模式 - 道具已有图片,跳过 - projectPropId: {}", projectPropId);
                     successCount.incrementAndGet();
                     continue;
@@ -1515,7 +1145,7 @@ public class MQConsumer {
                         projectProp.getOverrideDescription() : (prop != null ? prop.getDescription() : null);
                 String propName = projectProp.getDisplayName() != null ?
                         projectProp.getDisplayName() : (prop != null ? prop.getName() : "道具");
-                String prompt = buildPropImagePrompt(propName, description);
+                String prompt = mediaPrompts.load(jobId, projectPropId).prompt();
 
                 log.info("生成道具图片 - projectPropId: {}, name: {}, prompt: {}", projectPropId, propName, prompt);
 
@@ -1611,14 +1241,6 @@ public class MQConsumer {
         } else {
             updateJobSuccessWithImages(jobId, successCount.get(), failCount.get(), allGeneratedImageUrls);
         }
-    }
-
-    static String buildPropImagePrompt(String propName, String description) {
-        if (description == null || description.isBlank()) {
-            return propName;
-        }
-        return String.format("道具画像，%s，%s，高质量高清，画质细腻，白色背景，单个物件",
-                propName, description.trim());
     }
 
     private void executeTextParsing(TextParsingMessage msg) {
@@ -1952,177 +1574,4 @@ public class MQConsumer {
         };
     }
 
-    // ==================== 分镜图生成内嵌规则 ====================
-
-    /**
-     * 分镜图生成的内嵌规则前缀
-     * 仅约束内容一致性与画面可用性，不强制任何美术风格
-     */
-    private static final String SHOT_IMAGE_PROMPT_PREFIX = 
-            "请根据以下分镜剧本生成单张画面。" +
-            "保持参考图中角色、场景和道具的外观一致，构图清晰，" +
-            "不要添加字幕、水印或画外文字。分镜剧本：";
-
-    /**
-     * 构建分镜图生成的完整提示词
-     * 
-     * @param scriptText 分镜剧本文本
-     * @return 带风格前缀的完整提示词
-     */
-    private String buildShotImagePrompt(String scriptText) {
-        return SHOT_IMAGE_PROMPT_PREFIX + scriptText;
-    }
-
-    // ==================== 分镜绑定角色图片查询 ====================
-
-    /**
-     * 获取分镜绑定的角色图片URL列表
-     * 
-     * <p>查询逻辑：
-     * <ol>
-     *   <li>查询shot_bindings表，找到shot_id=分镜ID且bind_type=PCHAR的记录</li>
-     *   <li>获取项目角色的缩略图URL</li>
-     *   <li>如果项目角色没有缩略图，查询角色库的缩略图</li>
-     *   <li>如果仍无缩略图，查询角色的资产版本</li>
-     * </ol>
-     * 
-     * @param shotId 分镜ID
-     * @return 角色图片URL列表
-     */
-    /** 角色姓名与其参考图URL的配对；用于在视频prompt中显式标注"第几张参考图对应哪个角色"。 */
-    private record CharacterReference(String name, String url) {}
-
-    /** 兼容旧调用方(分镜图生成参考图)：只要URL列表，不需要姓名。 */
-    private List<String> getBoundCharacterImages(Long shotId) {
-        return getBoundCharacterReferences(shotId).stream().map(CharacterReference::url).toList();
-    }
-
-    /**
-     * 按分镜绑定顺序解析人物参考图（姓名 + URL）。
-     *
-     * <p>优先级：项目角色缩略图 &gt; 角色库缩略图 &gt; 角色资产；每一级都会校验URL有效性
-     * ({@link #isValidReferenceUrl})，不会把占位图(如 via.placeholder.com)当成"已有参考图"
-     * 误发给上游——之前的实现只判断非空，占位图会被当作真实参考图直接发出去，导致人物样貌
-     * 与实际角色对不上。某个角色三级都拿不到有效图时会跳过并打警告日志，而不是塞一张假图。
-     */
-    private List<CharacterReference> getBoundCharacterReferences(Long shotId) {
-        List<CharacterReference> references = new java.util.ArrayList<>();
-
-        try {
-            // 1. 查询分镜绑定的角色（bind_type=PCHAR）
-            var bindingQuery = new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<ShotBinding>();
-            bindingQuery.eq(ShotBinding::getShotId, shotId)
-                       .eq(ShotBinding::getBindType, "PCHAR");
-            List<ShotBinding> bindings = shotBindingMapper.selectList(bindingQuery);
-
-            if (bindings.isEmpty()) {
-                log.debug("分镜未绑定角色 - shotId: {}", shotId);
-                return references;
-            }
-
-            // 2. 获取项目角色ID列表
-            List<Long> characterIds = bindings.stream()
-                    .map(ShotBinding::getBindId)
-                    .collect(java.util.stream.Collectors.toList());
-
-            // 3. 批量查询项目角色
-            List<ProjectCharacter> characters = projectCharacterMapper.selectBatchIds(characterIds);
-
-            // 4. 获取关联的角色库ID，用于查询库缩略图
-            List<Long> libraryCharacterIds = characters.stream()
-                    .map(ProjectCharacter::getLibraryCharacterId)
-                    .filter(id -> id != null)
-                    .distinct()
-                    .collect(java.util.stream.Collectors.toList());
-
-            Map<Long, String> libraryThumbnailMap = new java.util.HashMap<>();
-            if (!libraryCharacterIds.isEmpty()) {
-                List<CharacterLibrary> libraryCharacters = characterLibraryMapper.selectBatchIds(libraryCharacterIds);
-                libraryThumbnailMap = libraryCharacters.stream()
-                        .filter(c -> isValidReferenceUrl(c.getThumbnailUrl()))
-                        .collect(java.util.stream.Collectors.toMap(CharacterLibrary::getId, CharacterLibrary::getThumbnailUrl));
-            }
-
-            // 5. 遍历每个角色，获取图片URL（每一级都校验有效性，不把占位图当真实参考图）
-            for (ProjectCharacter character : characters) {
-                String thumbnailUrl = null;
-                String characterName = character.getDisplayName() != null
-                        ? character.getDisplayName() : ("角色" + character.getId());
-
-                // 优先级：项目角色缩略图 > 角色库缩略图 > 角色资产
-                if (isValidReferenceUrl(character.getThumbnailUrl())) {
-                    thumbnailUrl = character.getThumbnailUrl();
-                    log.debug("使用项目角色缩略图 - characterId: {}, url: {}", character.getId(), thumbnailUrl);
-                } else if (character.getLibraryCharacterId() != null) {
-                    String libraryThumbnail = libraryThumbnailMap.get(character.getLibraryCharacterId());
-                    if (isValidReferenceUrl(libraryThumbnail)) {
-                        thumbnailUrl = libraryThumbnail;
-                        log.debug("使用角色库缩略图 - characterId: {}, libraryId: {}, url: {}",
-                                character.getId(), character.getLibraryCharacterId(), thumbnailUrl);
-                    }
-                }
-
-                // 如果还没有有效缩略图，查询角色资产
-                if (thumbnailUrl == null) {
-                    String assetUrl = getCharacterAssetUrl(character.getId());
-                    if (isValidReferenceUrl(assetUrl)) {
-                        thumbnailUrl = assetUrl;
-                        log.debug("使用角色资产 - characterId: {}, url: {}", character.getId(), thumbnailUrl);
-                    }
-                }
-
-                if (thumbnailUrl != null) {
-                    references.add(new CharacterReference(characterName, thumbnailUrl));
-                } else {
-                    log.warn("角色缺少有效参考图(缩略图/角色库/角色资产均为空或占位图)，视频/分镜图生成时将不携带该角色的参考图 - "
-                            + "shotId: {}, characterId: {}, name: {}", shotId, character.getId(), characterName);
-                }
-            }
-
-            log.info("获取分镜绑定角色图片完成 - shotId: {}, characterCount: {}, imageCount: {}",
-                    shotId, characters.size(), references.size());
-
-        } catch (Exception e) {
-            log.error("获取分镜绑定角色图片失败 - shotId: {}", shotId, e);
-        }
-
-        return references;
-    }
-    
-    /**
-     * 获取角色的资产图URL
-     * 
-     * @param characterId 项目角色ID
-     * @return 资产图URL，不存在返回null
-     */
-    private String getCharacterAssetUrl(Long characterId) {
-        try {
-            // 查询角色的图片资产
-            var assetQuery = new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.ym.ai_story_studio_server.entity.Asset>();
-            assetQuery.eq(com.ym.ai_story_studio_server.entity.Asset::getOwnerType, "PCHAR")
-                     .eq(com.ym.ai_story_studio_server.entity.Asset::getOwnerId, characterId)
-                     .eq(com.ym.ai_story_studio_server.entity.Asset::getAssetType, "CHAR_IMG")
-                     .orderByDesc(com.ym.ai_story_studio_server.entity.Asset::getCreatedAt)
-                     .last("LIMIT 1");
-            
-            var asset = assetMapper.selectOne(assetQuery);
-            if (asset == null) {
-                return null;
-            }
-            
-            // 查询资产的最新版本
-            var versionQuery = new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<AssetVersion>();
-            versionQuery.eq(AssetVersion::getAssetId, asset.getId())
-                       .eq(AssetVersion::getStatus, "READY")
-                       .orderByDesc(AssetVersion::getVersionNo)
-                       .last("LIMIT 1");
-            
-            AssetVersion version = assetVersionMapper.selectOne(versionQuery);
-            return version != null ? version.getUrl() : null;
-            
-        } catch (Exception e) {
-            log.error("查询角色资产失败 - characterId: {}", characterId, e);
-            return null;
-        }
-    }
 }

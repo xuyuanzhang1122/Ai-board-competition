@@ -46,6 +46,7 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class BatchGenerationServiceTest {
 
+    @Mock private com.ym.ai_story_studio_server.workbench.MediaPromptSnapshots mediaPrompts;
     @Mock
     private MQProducer mqProducer;
     @Mock
@@ -80,6 +81,7 @@ class BatchGenerationServiceTest {
     @BeforeEach
     void setUp() {
         UserContext.setUserId(42L);
+        org.mockito.Mockito.lenient().when(imageProvider.validateImageConfiguration(any(), any())).thenAnswer(call -> call.getArgument(1));
 
         Project project = new Project();
         project.setId(7L);
@@ -132,6 +134,18 @@ class BatchGenerationServiceTest {
         service.generatePropsBatch(7L, request(31L, 32L));
 
         assertJobItems("PPROP", 31L, 32L);
+    }
+
+    @Test void freezesManagedRequestBeforeCreatingOrDispatchingJobs() {
+        when(projectPropMapper.selectBatchIds(anyCollection())).thenReturn(List.of(prop(31L)));
+        var frozen=new com.ym.ai_story_studio_server.workbench.MediaPromptSnapshots.Snapshot(1,"published v1",List.of(),java.util.Map.of("model","stub","aspectRatio","1:1"),List.of(),null);
+        org.mockito.Mockito.lenient().when(mediaPrompts.forTarget(org.mockito.ArgumentMatchers.eq(7L),org.mockito.ArgumentMatchers.eq(31L),org.mockito.ArgumentMatchers.eq("PROP_IMAGE"),any(),any(),any())).thenReturn(frozen);
+        service.generatePropsBatch(7L,request(31L));
+        var order=org.mockito.Mockito.inOrder(mediaPrompts,jobMapper,mqProducer);
+        order.verify(mediaPrompts).forTarget(org.mockito.ArgumentMatchers.eq(7L),org.mockito.ArgumentMatchers.eq(31L),org.mockito.ArgumentMatchers.eq("PROP_IMAGE"),any(),any(),any());
+        order.verify(jobMapper).insert(any(Job.class));
+        order.verify(mediaPrompts).save(501L,31L,frozen);
+        order.verify(mqProducer).sendBatchPropImageTask(any(),any(),any(),any(),any(),any(),any(),any());
     }
 
     private static BatchGenerateRequest request(Long... targetIds) {
