@@ -6,6 +6,14 @@ import { creationApi } from './api'
 
 vi.mock('@/shared/api/client', () => ({ default: { get: vi.fn(), post: vi.fn(), put: vi.fn() } }))
 
+it('preserves target and lock snapshots for partial requests and revisioned locks', async () => {
+  const payload = { requestId: 'partial-original', revision: 7, model: 'catalog', shotIds: ['a'], lockedShotIds: ['b'], instruction: '保留人工结尾' }
+  await creationApi.partial(12, payload)
+  await creationApi.locks(12, { revision: 7, lockedShotIds: ['b'] })
+  expect(api.post).toHaveBeenCalledWith('/creation/drafts/12/partial-runs', payload, undefined)
+  expect(api.put).toHaveBeenCalledWith('/creation/drafts/12/shot-locks', { revision: 7, lockedShotIds: ['b'] }, undefined)
+})
+
 describe('creation API contract', () => {
   it('downloads Excel through the authenticated Axios client in blob mode', async () => {
     const workbook = new Blob(['xlsx'])

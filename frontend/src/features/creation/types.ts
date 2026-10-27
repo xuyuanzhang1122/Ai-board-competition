@@ -53,6 +53,7 @@ export interface Body {
   storyboard: Board | null
 }
 export type Stage = 'SCRIPT' | 'STORYBOARD'
+export type RunStage = Stage | 'STORYBOARD_PARTIAL'
 export interface Run {
   applied: boolean
   error: string | null
@@ -62,12 +63,13 @@ export interface Run {
   model: string
   output: string | null
   promptVersion: number
-  stage: Stage
+  stage: RunStage
   status: string
 }
 export interface Draft {
   body: Body
   id: number
+  lockedShotIds?: string[]
   projectId: number | null
   revision: number
   runs: Run[]
@@ -85,7 +87,17 @@ export interface GenerateRequest {
   revision: number
   stage: Stage
 }
+export interface PartialGenerateRequest {
+  instruction: string
+  lockedShotIds: string[]
+  model: string
+  requestId: string
+  revision: number
+  shotIds: string[]
+}
 export type PendingRequest =
+  | { kind: 'partial'; draftId: number; payload: PartialGenerateRequest }
+  | { kind: 'shot-locks'; draftId: number; payload: { revision: number; lockedShotIds: string[] } }
   | RevisionRequest
   | { kind: 'create'; payload: { requestId: string; brief: Brief } }
   | { kind: 'generate'; draftId: number; payload: GenerateRequest }

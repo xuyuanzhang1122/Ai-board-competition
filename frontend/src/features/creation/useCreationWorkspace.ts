@@ -239,8 +239,8 @@ export function useCreationWorkspace(account: number, token: string, route: stri
         if (!isCurrent()) return
         applyDraft(draft)
         navigateTo = `/creation/${draft.id}`
-      } else if (request.kind === 'generate') {
-        const run = await scopedApi.generate(request.draftId, request.payload)
+      } else if (request.kind === 'generate' || request.kind === 'partial') {
+        const run = request.kind === 'partial' ? await scopedApi.partial(request.draftId, request.payload) : await scopedApi.generate(request.draftId, request.payload)
         if (!isCurrent()) return
         const draft = snapshot.current.draft
         if (draft)
@@ -255,7 +255,9 @@ export function useCreationWorkspace(account: number, token: string, route: stri
         navigateTo = `/editor/${result.projectId}`
       } else {
         const draft =
-          request.kind === 'save'
+          request.kind === 'shot-locks'
+            ? await scopedApi.locks(request.draftId, request.payload)
+            : request.kind === 'save'
             ? await scopedApi.save(request.draftId, request.payload)
             : request.kind === 'adopt'
               ? await scopedApi.adopt(request.draftId, request.runId, request.payload.revision)
@@ -315,7 +317,7 @@ export function useCreationWorkspace(account: number, token: string, route: stri
     }
   }
 
-  async function download() {
+  async function download(format: 'xlsx' | 'json' = 'xlsx') {
     if (
       !snapshot.current.draft ||
       snapshot.current.busy ||
@@ -327,12 +329,14 @@ export function useCreationWorkspace(account: number, token: string, route: stri
       return
     patch({ busy: true, error: '' })
     try {
-      const blob = await scopedApi.export(snapshot.current.draft.id)
+      const blob = format === 'json'
+        ? new Blob([JSON.stringify(await scopedApi.evidence(snapshot.current.draft.id), null, 2)], { type: 'application/json' })
+        : await scopedApi.export(snapshot.current.draft.id)
       if (!isCurrent()) return
       const url = URL.createObjectURL(blob)
       const anchor = document.createElement('a')
       anchor.href = url
-      anchor.download = `分镜-${snapshot.current.draft.id}.xlsx`
+      anchor.download = `分镜-${snapshot.current.draft.id}.${format}`
       anchor.click()
       window.setTimeout(() => URL.revokeObjectURL(url), 1000)
     } catch (error) {

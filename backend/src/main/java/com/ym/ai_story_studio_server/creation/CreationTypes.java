@@ -17,10 +17,14 @@ public final class CreationTypes {
                        Board storyboard, int boardScriptVersion, boolean boardConfirmed) {}
     public record Run(long id, String stage, String status, long inputRevision, String model, long jobId,
                       String output, String error, int promptVersion, boolean applied) {}
-    public record Draft(long id, long revision, String title, Body body, Long projectId, List<Run> runs) {}
+    public record Draft(long id, long revision, String title, Body body, Long projectId, List<Run> runs, List<String> lockedShotIds) {
+        public Draft(long id,long revision,String title,Body body,Long projectId,List<Run> runs) {this(id,revision,title,body,projectId,runs,List.of());}
+    }
     public record Create(String requestId, Brief brief) {}
     public record Save(@JsonDeserialize(using=StrictNumbers.LongValue.class) long revision, Brief brief, String script, Board storyboard) {}
     public record Generate(String requestId, @JsonDeserialize(using=StrictNumbers.LongValue.class) long revision, String stage, String model) {}
+    public record PartialGenerate(String requestId,@JsonDeserialize(using=StrictNumbers.LongValue.class) long revision,String model,List<String> shotIds,List<String> lockedShotIds,String instruction) {}
+    public record ShotLocks(@JsonDeserialize(using=StrictNumbers.LongValue.class) long revision,List<String> lockedShotIds) {}
     public record Confirm(@JsonDeserialize(using=StrictNumbers.LongValue.class) long revision, String stage) {}
     public record Adopt(@JsonDeserialize(using=StrictNumbers.LongValue.class) long revision) {}
     public record ProjectRequest(@JsonDeserialize(using=StrictNumbers.LongValue.class) long revision, String requestId) {}

@@ -26,7 +26,12 @@ public class CreationService {
     public CreationService(JdbcTemplate db,TransactionTemplate tx,AiTextService text,ObjectMapper json,StoryboardContract contract,StoryboardProjectWriter projects,com.ym.ai_story_studio_server.workbench.WorkbenchLibraryService library){this.db=db;this.tx=tx;this.text=text;this.json=json;this.contract=contract;this.projects=projects;this.library=library;}
     private long user(){Long u=UserContext.getUserId();if(u==null)throw new BusinessException(ResultCode.UNAUTHORIZED);return u;}
     public List<Draft> list(){return db.query("SELECT * FROM creation_drafts WHERE user_id=? ORDER BY updated_at DESC,id DESC LIMIT 100",(r,n)->draft(r.getLong("id"),r.getLong("revision"),r.getString("title"),r.getString("body_json"),r.getObject("project_id",Long.class)),user());}
-    private Draft draft(long id,long revision,String title,String body,Long project){return new Draft(id,revision,title,decode(body,Body.class),project,runs(id));}
+    private Draft draft(long id,long revision,String title,String body,Long project){return new Draft(id,revision,title,decode(body,Body.class),project,runs(id),locks(id));}
+    private List<String> locks(long id){
+        String raw=db.queryForObject("SELECT locked_shot_ids_json FROM creation_drafts WHERE id=?",String.class,id);
+        try{return raw==null?List.of():json.readValue(raw,new com.fasterxml.jackson.core.type.TypeReference<List<String>>(){});}
+        catch(Exception error){throw new IllegalStateException("镜头锁定记录无法读取",error);}
+    }
     private List<Run> runs(long id){return db.query("SELECT * FROM creation_runs WHERE draft_id=? ORDER BY id DESC",(r,n)->new Run(r.getLong("id"),r.getString("stage"),r.getString("status"),r.getLong("input_revision"),r.getString("model"),r.getLong("job_id"),r.getString("output_text"),r.getString("error_message"),r.getInt("prompt_version"),r.getBoolean("applied")),id);}
     private Draft owned(long id,boolean lock){var list=db.query("SELECT * FROM creation_drafts WHERE id=? AND user_id=?"+(lock?" FOR UPDATE":""),(r,n)->draft(r.getLong("id"),r.getLong("revision"),r.getString("title"),r.getString("body_json"),r.getObject("project_id",Long.class)),id,user());if(list.isEmpty())throw new BusinessException(ResultCode.RESOURCE_NOT_FOUND,"创作不存在");return list.get(0);}
     public Draft detail(long id){return owned(id,false);}
@@ -55,6 +60,8 @@ public class CreationService {
         Draft d=owned(id,true);revision(d,request.revision());contract.validateBrief(request.brief());optional(request.script(),20000,"剧本");
         Body old=d.body();String script=request.script()==null?"":request.script();
         if(request.storyboard()!=null&&!Objects.equals(old.storyboard(),request.storyboard()))contract.validate(request.storyboard(),request.brief().duration(),contract.sources(request.brief()));
+        if(request.storyboard()!=null)require(request.storyboard().shots().stream().map(Shot::id).toList().containsAll(d.lockedShotIds()),"请先解除被删除镜头的锁定");
+        else require(d.lockedShotIds().isEmpty(),"请先解除镜头锁定后清空分镜");
         boolean changed=!Objects.equals(old.brief(),request.brief())||!old.script().equals(script);
         boolean boardChanged=!Objects.equals(old.storyboard(),request.storyboard());
         Body next=new Body(request.brief(),script,old.scriptVersion()+(changed?1:0),!changed&&old.scriptConfirmed(),request.storyboard(),
@@ -83,12 +90,49 @@ public class CreationService {
         }
         revision(d,request.revision());require(Set.of("SCRIPT","STORYBOARD").contains(request.stage()==null?"":request.stage()),"阶段无效");
         require(d.runs().stream().noneMatch(r->Set.of("PENDING","RUNNING").contains(r.status())),"已有生成任务执行中");
-        if("STORYBOARD".equals(request.stage()))require(d.body().scriptConfirmed(),"请先保存并确认剧本");
+        if("STORYBOARD".equals(request.stage())){require(d.body().scriptConfirmed(),"请先保存并确认剧本");require(d.lockedShotIds().isEmpty(),"已有锁定镜头，请使用局部重生成或先解除锁定");}
         var prompt=library.published(request.stage());
         int version=prompt.version();String instruction=prompt.content();
         String input=encode(Map.of("brief",d.body().brief(),"confirmedScript","STORYBOARD".equals(request.stage())?d.body().script():""));
         var job=text.createQueuedConversationJob(user(),request.model(),List.of(new ChatTurn("system",instruction),new ChatTurn("user",input)));
         long run=JdbcIds.insert(db,"INSERT INTO creation_runs(draft_id,request_id,stage,input_revision,model,job_id,prompt_version,input_json) VALUES(?,?,?,?,?,?,?,?)",id,request.requestId(),request.stage(),d.revision(),request.model(),job.getId(),version,input);
+        return runs(id).stream().filter(r->r.id()==run).findFirst().orElseThrow();
+    });}
+    public Draft lockShots(long id,ShotLocks request){return tx.execute(t->{
+        Draft d=owned(id,true);require(request!=null,"锁定请求必填");
+        List<String> ids=request.lockedShotIds();validateShotIds(d,ids,true);
+        if(new HashSet<>(ids).equals(new HashSet<>(d.lockedShotIds())))return d;
+        revision(d,request.revision());
+        db.update("UPDATE creation_drafts SET locked_shot_ids_json=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=?",encode(ids),id);
+        db.update("INSERT INTO creation_events(draft_id,user_id,revision,action,before_json,after_json) VALUES(?,?,?,'LOCK_SHOTS',?,?)",id,user(),d.revision()+1,encode(Map.of("lockedShotIds",d.lockedShotIds())),encode(Map.of("lockedShotIds",ids)));
+        return owned(id,false);
+    });}
+    private void validateShotIds(Draft d,List<String> ids,boolean empty){
+        require(ids!=null&&ids.size()<=20&&(empty||!ids.isEmpty()),"请选择1至20个镜头");
+        require(new HashSet<>(ids).size()==ids.size(),"镜头 ID 重复");
+        require(d.body().storyboard()!=null,"尚无分镜");
+        require(d.body().storyboard().shots().stream().map(Shot::id).toList().containsAll(ids),"镜头不存在");
+    }
+    public Run partial(long id,PartialGenerate request){return tx.execute(t->{
+        Draft d=owned(id,true);require(request!=null,"局部请求必填");requestId(request.requestId());
+        var rows=db.queryForList("SELECT id,input_json FROM creation_runs WHERE draft_id=? AND request_id=?",id,request.requestId());
+        if(!rows.isEmpty()){
+            try{require(json.readTree((String)rows.get(0).get("input_json")).path("request").equals(json.readTree(encode(request))),"请求标识已用于其他内容");}
+            catch(java.io.IOException error){throw invalid("请求标识已用于其他内容");}
+            long run=((Number)rows.get(0).get("id")).longValue();return runs(id).stream().filter(r->r.id()==run).findFirst().orElseThrow();
+        }
+        revision(d,request.revision());Body body=d.body();
+        require(body.scriptConfirmed()&&body.boardScriptVersion()==body.scriptVersion(),"请先确认当前剧本及对应分镜");
+        contract.validate(body.storyboard(),body.brief().duration(),contract.sources(body.brief()));
+        validateShotIds(d,request.shotIds(),false);validateShotIds(d,request.lockedShotIds(),true);
+        require(new HashSet<>(request.lockedShotIds()).equals(new HashSet<>(d.lockedShotIds())),"锁定集合已变化，请刷新");
+        require(Collections.disjoint(request.shotIds(),d.lockedShotIds()),"不可重生成锁定镜头");
+        text(request.instruction(),2000,"局部修改要求");text(request.model(),128,"模型");
+        require(d.runs().stream().noneMatch(r->Set.of("PENDING","RUNNING").contains(r.status())),"已有生成任务执行中");
+        var prompt=library.published("STORYBOARD_PARTIAL");
+        String input=encode(Map.of("brief",body.brief(),"confirmedScript",body.script(),"storyboard",body.storyboard(),"shotIds",request.shotIds(),"lockedShotIds",d.lockedShotIds(),"instruction",request.instruction()));
+        var job=text.createQueuedConversationJob(user(),request.model(),List.of(new ChatTurn("system",prompt.content()),new ChatTurn("user",input)));
+        long run=JdbcIds.insert(db,"INSERT INTO creation_runs(draft_id,request_id,stage,input_revision,model,job_id,prompt_version,input_json) VALUES(?,?,'STORYBOARD_PARTIAL',?,?,?,?,?)",id,request.requestId(),d.revision(),request.model(),job.getId(),prompt.version(),encode(Map.of("body",body,"request",request)));
         return runs(id).stream().filter(r->r.id()==run).findFirst().orElseThrow();
     });}
     public Draft adopt(long id,long runId,Adopt request){return tx.execute(t->{
@@ -112,6 +156,19 @@ public class CreationService {
         db.update("UPDATE creation_drafts SET project_id=?,project_request_id=?,updated_at=CURRENT_TIMESTAMP WHERE id=?",project,request.requestId(),id);
         event(id,d.revision(),"CREATE_PROJECT",null,b,b);return new ProjectResult(project);
     });}
+    public Map<String,Object> evidence(long id){
+        Draft d=detail(id);var evidence=new LinkedHashMap<String,Object>();
+        evidence.put("brand","2026 山东省首届大学生 AI 大模型创新传播大赛 · 你的不对我的队");
+        evidence.put("disclaimer","本版本仅供参赛展示与评审使用，非正式商业版本。");
+        evidence.put("draft",d);evidence.put("events",db.queryForList("SELECT * FROM creation_events WHERE draft_id=? ORDER BY id",id));
+        evidence.put("inputs",db.queryForList("SELECT id,stage,input_revision,prompt_version,input_json FROM creation_runs WHERE draft_id=? ORDER BY id",id));
+        evidence.put("modelExecutions",db.query("SELECT j.id,j.status,j.started_at,j.finished_at,j.meta_json FROM jobs j JOIN creation_runs r ON r.job_id=j.id WHERE r.draft_id=? ORDER BY j.id",(row,n)->{
+            var execution=new LinkedHashMap<String,Object>();execution.put("jobId",row.getLong("id"));execution.put("status",row.getString("status"));execution.put("startedAt",row.getString("started_at"));execution.put("finishedAt",row.getString("finished_at"));
+            try{var metadata=json.readTree(row.getString("meta_json"));for(String field:List.of("textSnapshot","provider","upstreamModel","inputTokens","outputTokens","usageKnown"))execution.put(field,metadata.path(field));}
+            catch(java.io.IOException error){throw new IllegalStateException("执行记录无法读取",error);}
+            return execution;
+        },id));return evidence;
+    }
     public List<Map<String,Object>> pendingJobs(){return db.queryForList("SELECT j.id,j.user_id,j.project_id FROM jobs j JOIN creation_runs r ON r.job_id=j.id WHERE j.status='PENDING' ORDER BY j.id LIMIT 16");}
     public void reconcileInterruptedJobs(){db.update("UPDATE jobs SET status='FAILED',error_message='服务重启，上游受理状态需确认；未自动重发，请核对任务记录',finished_at=CURRENT_TIMESTAMP WHERE status='RUNNING' AND id IN (SELECT job_id FROM creation_runs)");synchronizeResults();}
     public void synchronizeResults(){
@@ -121,7 +178,13 @@ public class CreationService {
             if("SUCCEEDED".equals(status)) {
                 try {
                     output=json.readTree((String)row.get("meta_json")).path("text").asText("");
-                    if("STORYBOARD".equals(row.get("stage"))) {Brief b=json.treeToValue(json.readTree((String)row.get("input_json")).path("brief"),Brief.class);contract.parse(output,b.duration(),contract.sources(b));}
+                    if("STORYBOARD_PARTIAL".equals(row.get("stage"))) {
+                        var frozen=json.readTree((String)row.get("input_json"));
+                        Body base=json.treeToValue(frozen.path("body"),Body.class);
+                        PartialGenerate request=json.treeToValue(frozen.path("request"),PartialGenerate.class);
+                        output=encode(new PartialStoryboardContract(json,contract).merge(output,base,request.shotIds()));
+                    }
+                    else if("STORYBOARD".equals(row.get("stage"))) {Brief b=json.treeToValue(json.readTree((String)row.get("input_json")).path("brief"),Brief.class);contract.parse(output,b.duration(),contract.sources(b));}
                     else text(output,20000,"生成的剧本");
                 }catch(Exception e){status="INVALID";error=e instanceof BusinessException?e.getMessage():"任务结果无法解析，原始输出已保留";}
             }

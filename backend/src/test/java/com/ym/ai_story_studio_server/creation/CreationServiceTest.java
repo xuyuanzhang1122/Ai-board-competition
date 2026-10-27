@@ -25,7 +25,8 @@ class CreationServiceTest {
         db.execute("CREATE TABLE storyboard_shots(id BIGINT AUTO_INCREMENT PRIMARY KEY,project_id BIGINT,shot_no INT,script_text CLOB)");
         for(String statement:ddl.split(";"))if(!statement.isBlank())db.execute(statement);
         for(String statement:Files.readString(Path.of("src/main/resources/db/migration/V40__workbench_library.sql")).split(";"))if(!statement.isBlank())db.execute(statement);
-        db.execute("CREATE TABLE jobs(id BIGINT PRIMARY KEY,user_id BIGINT,project_id BIGINT,status VARCHAR(20),meta_json CLOB,error_message CLOB,finished_at TIMESTAMP)");
+        for(String statement:Files.readString(Path.of("src/main/resources/db/migration/V46__partial_storyboard_and_locks.sql")).split(";"))if(!statement.isBlank())db.execute(statement);
+        db.execute("CREATE TABLE jobs(id BIGINT PRIMARY KEY,user_id BIGINT,project_id BIGINT,status VARCHAR(20),meta_json CLOB,error_message CLOB,finished_at TIMESTAMP,started_at TIMESTAMP)");
         db.execute("CREATE TABLE projects(id BIGINT AUTO_INCREMENT PRIMARY KEY,user_id BIGINT,name VARCHAR(128),aspect_ratio VARCHAR(16),style_code VARCHAR(64),raw_text CLOB,status VARCHAR(32),model_config_json CLOB,deleted_at TIMESTAMP)");
         for(String table:List.of("project_characters","project_scenes","project_props")) db.execute("CREATE TABLE "+table+"(id BIGINT AUTO_INCREMENT PRIMARY KEY,project_id BIGINT,display_name VARCHAR(64),override_description CLOB)");
         db.execute("CREATE TABLE shot_bindings(id BIGINT AUTO_INCREMENT PRIMARY KEY,shot_id BIGINT,bind_type VARCHAR(16),bind_id BIGINT)");
@@ -137,5 +138,67 @@ class CreationServiceTest {
         db.update("UPDATE jobs SET status='RUNNING' WHERE id=?",run.jobId());service.reconcileInterruptedJobs();
         assertThat(service.detail(d.id()).runs().get(0).status()).isEqualTo("FAILED");
         verify(text,never()).executeQueuedTextJob(any(),any(),any());
+    }
+
+    @Test void evidenceIncludesFrozenPartialRequestAndLockAuditButRemainsOwned() throws Exception {
+        var d=board();var locked=service.lockShots(d.id(),new ShotLocks(d.revision(),List.of(d.body().storyboard().shots().get(1).id())));
+        var request=partialRequest(locked,"evidence",List.of(d.body().storyboard().shots().get(0).id()),locked.lockedShotIds());
+        service.partial(locked.id(),request);
+        String evidence=json.writeValueAsString(service.evidence(locked.id()));
+        assertThat(evidence).contains("lockedShotIds","LOCK_SHOTS","STORYBOARD_PARTIAL","只修改画面");
+        UserContext.setUserId(2L);assertThatThrownBy(()->service.evidence(locked.id())).hasMessageContaining("不存在");
+    }
+    PartialGenerate partialRequest(Draft d,String key,List<String> ids,List<String> locks) {return new PartialGenerate(key,d.revision(),"deepseek-flash",ids,locks,"只修改画面为海浪远景，保留时长和引用");}
+    String partialOutput(Draft d) throws Exception {
+        var shot=d.body().storyboard().shots().get(0);
+        var changed=new Shot(shot.id(),shot.no(),shot.duration(),"人工要求的海浪远景",shot.narration(),shot.dialogue(),shot.shotSize(),shot.cameraMovement(),shot.characters(),shot.scene(),shot.props(),shot.imagePrompt(),shot.videoPrompt(),shot.sourceIds());
+        return json.writeValueAsString(Map.of("shots",List.of(changed)));
+    }
+    @Test void partialCandidateChangesOnlyChosenShotAndInvalidatesBoardConfirmation() throws Exception {
+        var d=board();String first=d.body().storyboard().shots().get(0).id(),second=d.body().storyboard().shots().get(1).id();
+        d=service.lockShots(d.id(),new ShotLocks(d.revision(),List.of(second)));
+        var req=partialRequest(d,"partial-1",List.of(first),List.of(second));var run=service.partial(d.id(),req);
+        assertThat(service.partial(d.id(),req).id()).isEqualTo(run.id());finish(run,partialOutput(d));
+        var adopted=service.adopt(d.id(),run.id(),new Adopt(d.revision()));
+        assertThat(adopted.body().storyboard().shots().get(0).visual()).contains("海浪远景");
+        assertThat(adopted.body().storyboard().shots().get(1)).isEqualTo(d.body().storyboard().shots().get(1));
+        assertThat(adopted.body().storyboard().assets()).isEqualTo(d.body().storyboard().assets());
+        assertThat(adopted.body().boardConfirmed()).isFalse();assertThat(adopted.lockedShotIds()).containsExactly(second);
+    }
+    @Test void partialTargetsCannotBeLockedUnknownOrChangedUnderOneRequestId() throws Exception {
+        var d=board();String first=d.body().storyboard().shots().get(0).id(),second=d.body().storyboard().shots().get(1).id();
+        d=service.lockShots(d.id(),new ShotLocks(d.revision(),List.of(second)));final var locked=d;
+        assertThatThrownBy(()->service.partial(locked.id(),partialRequest(locked,"bad1",List.of(second),List.of(second)))).hasMessageContaining("锁定");
+        assertThatThrownBy(()->service.partial(locked.id(),partialRequest(locked,"bad2",List.of("invented"),List.of(second)))).hasMessageContaining("镜头");
+        assertThatThrownBy(()->service.partial(locked.id(),partialRequest(locked,"bad3",List.of(first,first),List.of(second)))).hasMessageContaining("重复");
+        assertThatThrownBy(()->service.partial(locked.id(),partialRequest(locked,"bad4",List.of(),List.of(second)))).hasMessageContaining("选择");
+        assertThatThrownBy(()->service.partial(locked.id(),partialRequest(locked,"bad5",List.of(first),List.of()))).hasMessageContaining("锁定");
+        var req=partialRequest(d,"same",List.of(first),List.of(second));service.partial(d.id(),req);
+        assertThatThrownBy(()->service.partial(locked.id(),new PartialGenerate("same",locked.revision(),"deepseek-flash",List.of(first),List.of(second),"不同要求"))).hasMessageContaining("标识");
+    }
+    @Test void laterLockChangeOrManualEditMakesPartialCandidateStale() throws Exception {
+        var d=board();String first=d.body().storyboard().shots().get(0).id();
+        var run=service.partial(d.id(),partialRequest(d,"stale",List.of(first),List.of()));finish(run,partialOutput(d));
+        var locked=service.lockShots(d.id(),new ShotLocks(d.revision(),List.of(first)));
+        assertThatThrownBy(()->service.adopt(locked.id(),run.id(),new Adopt(locked.revision()))).hasMessageContaining("过期");
+        assertThat(locked.body().storyboard()).isEqualTo(d.body().storyboard());
+        assertThat(db.queryForObject("SELECT after_json FROM creation_events WHERE action='LOCK_SHOTS' AND draft_id=?",String.class,d.id())).contains(first);
+    }
+    @Test void invalidPartialOutputCannotChangeTimingIdsAssetsOrUnselectedShots() throws Exception {
+        var d=board();var run=service.partial(d.id(),partialRequest(d,"invalid",List.of(d.body().storyboard().shots().get(0).id()),List.of()));
+        var full=json.readTree(partialOutput(d));((com.fasterxml.jackson.databind.node.ObjectNode)full.path("shots").get(0)).put("duration",25);
+        finish(run,json.writeValueAsString(full));assertThat(service.detail(d.id()).runs().get(0).status()).isEqualTo("INVALID");
+        assertThat(service.detail(d.id()).body().storyboard()).isEqualTo(d.body().storyboard());
+        assertThatThrownBy(()->service.adopt(d.id(),run.id(),new Adopt(d.revision()))).hasMessageContaining("候选");
+        var other=service.partial(d.id(),partialRequest(d,"extra",List.of(d.body().storyboard().shots().get(0).id()),List.of()));
+        finish(other,json.writeValueAsString(Map.of("shots",d.body().storyboard().shots())));
+        assertThat(service.detail(d.id()).runs().get(0).status()).isEqualTo("INVALID");
+    }
+    @Test void locksAndPartialCallsRemainOwnedAndFullRegenerationCannotBypassLocks() throws Exception {
+        var d=board();var locked=service.lockShots(d.id(),new ShotLocks(d.revision(),List.of(d.body().storyboard().shots().get(0).id())));
+        assertThatThrownBy(()->generate(locked,"STORYBOARD","full")).hasMessageContaining("锁定");
+        UserContext.setUserId(2L);
+        assertThatThrownBy(()->service.lockShots(locked.id(),new ShotLocks(locked.revision(),List.of()))).hasMessageContaining("不存在");
+        assertThatThrownBy(()->service.partial(locked.id(),partialRequest(locked,"foreign",List.of("shot1"),List.of()))).hasMessageContaining("不存在");
     }
 }

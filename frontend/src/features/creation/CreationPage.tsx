@@ -7,6 +7,7 @@ import { BRANDING } from '@/shared/constants/config'
 import { useUserStore } from '@/shared/store/user'
 
 import { BriefEditor, StoryboardEditor } from './editors'
+import { PartialRegeneration } from './PartialRegeneration'
 import { canAdopt, parseBoard } from './state'
 import type { Body, Stage } from './types'
 import { useCreationWorkspace } from './useCreationWorkspace'
@@ -188,7 +189,7 @@ function CreationSession({
               <strong>原请求待确认</strong>
               <p>
                 已保留原始请求和输入。
-                {pending.kind === 'generate' ||
+                {pending.kind === 'generate' || pending.kind === 'partial' ||
                 pending.kind === 'create' ||
                 pending.kind === 'project'
                   ? `请求 ID：${pending.payload.requestId}`
@@ -290,7 +291,7 @@ function CreationSession({
                   <div className="creation-section-heading">
                     <h2>分镜编辑</h2>
                     <button
-                      disabled={!saved || !body.scriptConfirmed || running || !model}
+                      disabled={!saved || !body.scriptConfirmed || running || !model || !!draft?.lockedShotIds?.length}
                       type="button"
                       onClick={() => generate('STORYBOARD')}
                     >
@@ -317,6 +318,13 @@ function CreationSession({
                       此分镜对应旧剧本。请基于当前已确认剧本重新生成，或修订分镜并保存后确认。
                     </p>
                   )}
+                  {draft && body.storyboard && <PartialRegeneration
+                    board={body.storyboard}
+                    disabled={!saved || !body.scriptConfirmed || boardStale || running || !model}
+                    lockedShotIds={draft.lockedShotIds ?? []}
+                    onGenerate={(shotIds, instruction) => void workspace.send({ kind: 'partial', draftId: draft.id, payload: { requestId: requestId(), revision: draft.revision, model, shotIds, lockedShotIds: draft.lockedShotIds ?? [], instruction } })}
+                    onLock={(lockedShotIds) => void workspace.send({ kind: 'shot-locks', draftId: draft.id, payload: { revision: draft.revision, lockedShotIds } })}
+                  />}
                   <details>
                     <summary>高级分镜 JSON（完整字段可编辑）</summary>
                     <label className="creation-field">
@@ -361,6 +369,7 @@ function CreationSession({
                 </div>
               )}
             </fieldset>
+            {draft && <button disabled={!saved} type="button" onClick={() => void workspace.download('json')}>导出生成与锁定记录</button>}
             {dirty && (
               <div className="creation-actions creation-editor-footer">
                 <button disabled={locked} type="button" onClick={save}>
@@ -386,7 +395,7 @@ function CreationSession({
                 <article className="creation-run" key={run.id}>
                   <div className="creation-section-heading">
                     <strong>
-                      {run.stage === 'SCRIPT' ? '剧本' : '分镜'} #{run.id} · {run.status}
+                      {run.stage === 'SCRIPT' ? '剧本' : run.stage === 'STORYBOARD_PARTIAL' ? '局部分镜' : '分镜'} #{run.id} · {run.status}
                     </strong>
                     {['PENDING', 'RUNNING'].includes(run.status) && <Waiting />}
                   </div>
