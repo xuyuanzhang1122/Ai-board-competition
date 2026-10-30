@@ -23,7 +23,8 @@ public class CreationService {
     private final StoryboardContract contract;
     private final StoryboardProjectWriter projects;
     private final com.ym.ai_story_studio_server.workbench.WorkbenchLibraryService library;
-    public CreationService(JdbcTemplate db,TransactionTemplate tx,AiTextService text,ObjectMapper json,StoryboardContract contract,StoryboardProjectWriter projects,com.ym.ai_story_studio_server.workbench.WorkbenchLibraryService library){this.db=db;this.tx=tx;this.text=text;this.json=json;this.contract=contract;this.projects=projects;this.library=library;}
+    private final com.ym.ai_story_studio_server.workbench.ManagedPromptRenderer promptRenderer;
+    public CreationService(JdbcTemplate db,TransactionTemplate tx,AiTextService text,ObjectMapper json,StoryboardContract contract,StoryboardProjectWriter projects,com.ym.ai_story_studio_server.workbench.WorkbenchLibraryService library,com.ym.ai_story_studio_server.workbench.ManagedPromptRenderer promptRenderer){this.db=db;this.tx=tx;this.text=text;this.json=json;this.contract=contract;this.projects=projects;this.library=library;this.promptRenderer=promptRenderer;}
     private long user(){Long u=UserContext.getUserId();if(u==null)throw new BusinessException(ResultCode.UNAUTHORIZED);return u;}
     public List<Draft> list(){return db.query("SELECT * FROM creation_drafts WHERE user_id=? ORDER BY updated_at DESC,id DESC LIMIT 100",(r,n)->draft(r.getLong("id"),r.getLong("revision"),r.getString("title"),r.getString("body_json"),r.getObject("project_id",Long.class)),user());}
     private Draft draft(long id,long revision,String title,String body,Long project){return new Draft(id,revision,title,decode(body,Body.class),project,runs(id),locks(id));}
@@ -129,9 +130,12 @@ public class CreationService {
         require(Collections.disjoint(request.shotIds(),d.lockedShotIds()),"不可重生成锁定镜头");
         text(request.instruction(),2000,"局部修改要求");text(request.model(),128,"模型");
         require(d.runs().stream().noneMatch(r->Set.of("PENDING","RUNNING").contains(r.status())),"已有生成任务执行中");
-        var prompt=library.published("STORYBOARD_PARTIAL");
-        String input=encode(Map.of("brief",body.brief(),"confirmedScript",body.script(),"storyboard",body.storyboard(),"shotIds",request.shotIds(),"lockedShotIds",d.lockedShotIds(),"instruction",request.instruction()));
-        var job=text.createQueuedConversationJob(user(),request.model(),List.of(new ChatTurn("system",prompt.content()),new ChatTurn("user",input)));
+        var context=Map.<String,Object>of("brief",body.brief(),"confirmedScript",body.script(),"storyboard",body.storyboard(),"shotIds",request.shotIds(),"lockedShotIds",d.lockedShotIds(),"instruction",request.instruction());
+        var variables=new LinkedHashMap<String,String>();
+        context.forEach((name,value)->variables.put(name,encode(value)));
+        var prompt=promptRenderer.render("STORYBOARD_PARTIAL",variables,"TEXT");
+        String input=encode(context);
+        var job=text.createQueuedConversationJob(user(),request.model(),List.of(new ChatTurn("system",prompt.rendered()),new ChatTurn("user",input)));
         long run=JdbcIds.insert(db,"INSERT INTO creation_runs(draft_id,request_id,stage,input_revision,model,job_id,prompt_version,input_json) VALUES(?,?,'STORYBOARD_PARTIAL',?,?,?,?,?)",id,request.requestId(),d.revision(),request.model(),job.getId(),prompt.version(),encode(Map.of("body",body,"request",request)));
         return runs(id).stream().filter(r->r.id()==run).findFirst().orElseThrow();
     });}

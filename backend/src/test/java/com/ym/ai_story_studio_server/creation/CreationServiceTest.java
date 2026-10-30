@@ -32,7 +32,9 @@ class CreationServiceTest {
         db.execute("CREATE TABLE shot_bindings(id BIGINT AUTO_INCREMENT PRIMARY KEY,shot_id BIGINT,bind_type VARCHAR(16),bind_id BIGINT)");
         text=mock(AiTextService.class);var next=new java.util.concurrent.atomic.AtomicLong(100);
         when(text.createQueuedConversationJob(anyLong(),anyString(),anyList())).thenAnswer(i->{Job j=new Job();j.setId(next.getAndIncrement());db.update("INSERT INTO jobs(id,user_id,project_id,status,meta_json) VALUES(?,?,0,'PENDING','{}')",j.getId(),i.<Long>getArgument(0));return j;});
-        service=new CreationService(db,new TransactionTemplate(new DataSourceTransactionManager(ds)),text,json,new StoryboardContract(json),new StoryboardProjectWriter(db,json),new com.ym.ai_story_studio_server.workbench.WorkbenchLibraryService(db,new TransactionTemplate(new DataSourceTransactionManager(ds))));
+        var tx=new TransactionTemplate(new DataSourceTransactionManager(ds));
+        var library=new com.ym.ai_story_studio_server.workbench.WorkbenchLibraryService(db,tx);
+        service=new CreationService(db,tx,text,json,new StoryboardContract(json),new StoryboardProjectWriter(db,json),library,new com.ym.ai_story_studio_server.workbench.ManagedPromptRenderer(library));
         UserContext.setUserId(1L);
     }
     @AfterEach void clear(){UserContext.clear();}
@@ -201,4 +203,61 @@ class CreationServiceTest {
         assertThatThrownBy(()->service.lockShots(locked.id(),new ShotLocks(locked.revision(),List.of()))).hasMessageContaining("不存在");
         assertThatThrownBy(()->service.partial(locked.id(),partialRequest(locked,"foreign",List.of("shot1"),List.of()))).hasMessageContaining("不存在");
     }
+    @Test void partialQueueRendersPublishedVariablesOnceAndFreezesOriginalInput() throws Exception {
+        var seeded=board();
+        var d=service.lockShots(seeded.id(),new ShotLocks(seeded.revision(),List.of(seeded.body().storyboard().shots().get(1).id())));
+        var tx=new TransactionTemplate(new DataSourceTransactionManager(Objects.requireNonNull(db.getDataSource())));
+        var library=new com.ym.ai_story_studio_server.workbench.WorkbenchLibraryService(db,tx);
+        var provider=mock(com.ym.ai_story_studio_server.provider.TextGenerationProvider.class);
+        var jobs=mock(com.ym.ai_story_studio_server.mapper.JobMapper.class);
+        var next=new java.util.concurrent.atomic.AtomicLong(900);
+        when(jobs.insert(any(Job.class))).thenAnswer(call->{
+            Job job=call.getArgument(0);job.setId(next.getAndIncrement());
+            db.update("INSERT INTO jobs(id,user_id,project_id,status,meta_json) VALUES(?,?,?,?,?)",job.getId(),job.getUserId(),job.getProjectId(),job.getStatus(),job.getMetaJson());return 1;
+        });
+        var realText=new AiTextService(provider,mock(com.ym.ai_story_studio_server.service.ChargingService.class),jobs,
+                new com.ym.ai_story_studio_server.config.AiProperties(),json,command->{throw new AssertionError("Queue acceptance must not dispatch a provider");});
+        var realService=new CreationService(db,tx,realText,json,new StoryboardContract(json),new StoryboardProjectWriter(db,json),library,new com.ym.ai_story_studio_server.workbench.ManagedPromptRenderer(library));
+        com.ym.ai_story_studio_server.util.AdminContext.setAdminId(7L);
+        try {
+            String template="简报={{brief}}\n剧本={{confirmedScript}}\n分镜={{storyboard}}\n选中={{shotIds}}\n锁定={{lockedShotIds}}\n要求={{instruction}}";
+            String variables="brief,confirmedScript,storyboard,shotIds,lockedShotIds,instruction";
+            var first=library.createPrompt(new com.ym.ai_story_studio_server.workbench.WorkbenchLibraryService.PromptCreate("STORYBOARD_PARTIAL",template,variables,"TEXT","自定义局部模板"));
+            library.changePromptStatus("STORYBOARD_PARTIAL",first.version(),new com.ym.ai_story_studio_server.workbench.WorkbenchLibraryService.PromptStatus("PUBLISHED",1));
+            String userInstruction="保留字面量 {{shotIds}} 与 {{instruction}}、$5 和反斜杠 \\";
+            var request=new PartialGenerate("rendered-partial",d.revision(),"deepseek-flash",List.of(d.body().storyboard().shots().get(0).id()),d.lockedShotIds(),userInstruction);
+            var run=realService.partial(d.id(),request);
+            String frozen=db.queryForObject("SELECT meta_json FROM jobs WHERE id=?",String.class,run.jobId());
+            var messages=json.readTree(frozen).path("textSnapshot").path("messages");
+            String expected="简报="+json.writeValueAsString(d.body().brief())+"\n剧本="+json.writeValueAsString(d.body().script())+"\n分镜="+json.writeValueAsString(d.body().storyboard())+"\n选中="+json.writeValueAsString(request.shotIds())+"\n锁定="+json.writeValueAsString(d.lockedShotIds())+"\n要求="+json.writeValueAsString(userInstruction);
+            assertThat(messages.get(0).path("role").asText()).isEqualTo("system");
+            assertThat(messages.get(0).path("content").asText()).isEqualTo(expected);
+            var original=json.readTree(messages.get(1).path("content").asText());
+            assertThat(original.path("instruction").asText()).isEqualTo(userInstruction);
+            assertThat(original.path("storyboard")).isEqualTo(json.valueToTree(d.body().storyboard()));
+            assertThat(original.path("shotIds")).isEqualTo(json.valueToTree(request.shotIds()));
+            String originalEvidence=db.queryForObject("SELECT input_json FROM creation_runs WHERE id=?",String.class,run.id());
+            assertThat(json.readTree(originalEvidence).path("request")).isEqualTo(json.readTree(json.writeValueAsString(request)));
+            assertThat(run.promptVersion()).isEqualTo(first.version());
+
+            var second=library.createPrompt(new com.ym.ai_story_studio_server.workbench.WorkbenchLibraryService.PromptCreate("STORYBOARD_PARTIAL","新版 {{instruction}}", "instruction","TEXT","替换发布"));
+            library.changePromptStatus("STORYBOARD_PARTIAL",second.version(),new com.ym.ai_story_studio_server.workbench.WorkbenchLibraryService.PromptStatus("PUBLISHED",first.version()));
+            db.update("UPDATE jobs SET status='FAILED',error_message='仅验证队列快照' WHERE id=?",run.jobId());realService.synchronizeResults();
+            var nextRequest=new PartialGenerate("rendered-partial-next",d.revision(),request.model(),request.shotIds(),d.lockedShotIds(),userInstruction);
+            var newRun=realService.partial(d.id(),nextRequest);
+            var newMessages=json.readTree(db.queryForObject("SELECT meta_json FROM jobs WHERE id=?",String.class,newRun.jobId())).path("textSnapshot").path("messages");
+            assertThat(newMessages.get(0).path("content").asText()).isEqualTo("新版 "+json.writeValueAsString(userInstruction));
+            assertThat(newRun.promptVersion()).isEqualTo(second.version());
+            library.changePromptStatus("STORYBOARD_PARTIAL",second.version(),new com.ym.ai_story_studio_server.workbench.WorkbenchLibraryService.PromptStatus("DISABLED",second.version()));
+            assertThat(db.queryForObject("SELECT meta_json FROM jobs WHERE id=?",String.class,run.jobId())).isEqualTo(frozen);
+            assertThat(db.queryForObject("SELECT input_json FROM creation_runs WHERE id=?",String.class,run.id())).isEqualTo(originalEvidence);
+            assertThat(db.queryForObject("SELECT meta_json FROM jobs WHERE id=?",String.class,newRun.jobId())).contains("新版");
+            db.update("UPDATE jobs SET status='FAILED',error_message='仅验证停用' WHERE id=?",newRun.jobId());realService.synchronizeResults();
+            assertThatThrownBy(()->realService.partial(d.id(),new PartialGenerate("disabled-partial",d.revision(),request.model(),request.shotIds(),d.lockedShotIds(),userInstruction))).hasMessageContaining("未发布");
+            verify(jobs,times(2)).insert(any(Job.class));
+            verify(provider,never()).generateText(any(),any(),any(),any(),any());
+            verify(provider,never()).generateConversation(any(),any(),any(),any(),any());
+        } finally {com.ym.ai_story_studio_server.util.AdminContext.clear();}
+    }
+
 }
