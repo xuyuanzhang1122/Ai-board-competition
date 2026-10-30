@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
 import { notify } from '@/shared/feedback/feedback'
+import { useUserStore } from '@/shared/store/user'
 import type { ExportRequest } from '@/shared/types/api'
 
 import { AssetVersionModal } from './components/dialogs/AssetVersionModal'
@@ -31,6 +32,8 @@ import { useEditorStore } from './store'
 
 export function EditorPage() {
   const { id } = useParams<{ id: string }>()
+  const userId = useUserStore((state) => state.userId)
+  const token = useUserStore((state) => state.token)
 
   const initProject = useEditorStore((state) => state.initProject)
   const resetEditor = useEditorStore((state) => state.reset)
@@ -67,6 +70,18 @@ export function EditorPage() {
     [],
   )
 
+  // Clear owned data synchronously, before a new account can render asset actions.
+  useEffect(() => useUserStore.subscribe((state, previous) => {
+    if (state.userId === previous.userId && state.token === previous.token) return
+    resetEditor()
+    useProjectStore.getState().setCurrentProject(null)
+    setPageStatus('loading')
+    setVersionRequest(null)
+    setExportOpen(false)
+    setExportJobId(null)
+    setModelConfigOpen(false)
+  }), [resetEditor])
+
   useEffect(() => {
     /* eslint-disable @eslint-react/hooks-extra/no-direct-set-state-in-use-effect --
        初始化流程需要在 effect 内根据异步结果切换页面状态;直接 setState 是这里的最小副作用。 */
@@ -90,7 +105,7 @@ export function EditorPage() {
       resetEditor()
       closePanel()
     }
-  }, [id, fetchProjectDetail, initProject, resetEditor, closePanel])
+  }, [id, userId, token, fetchProjectDetail, initProject, resetEditor, closePanel])
 
   useEditorKeyboardShortcuts({
     canRedo,

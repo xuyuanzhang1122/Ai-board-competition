@@ -1,6 +1,7 @@
 import { create, type StoreApi, type UseBoundStore } from 'zustand'
 
 import { homeApi } from '@/features/home/api'
+import { useUserStore } from '@/shared/store/user'
 import type {
   CreateFolderDTO,
   CreateProjectDTO,
@@ -97,6 +98,7 @@ export const createProjectStore = (
   const projectApi = { ...defaultApi, ...dependencyOverrides }
 
   return create<ProjectStore>((set, get) => {
+    let detailRequest = 0
     const update = (patch: Partial<ProjectData>) => {
       set((state) => {
         const next = { ...state, ...patch }
@@ -147,12 +149,16 @@ export const createProjectStore = (
       },
 
       async fetchProjectDetail(id) {
+        const request = ++detailRequest
+        const { userId, token } = useUserStore.getState()
+        const current = () => request === detailRequest && useUserStore.getState().userId === userId && useUserStore.getState().token === token
         try {
           const project = await projectApi.getProject(id)
+          if (!current()) throw new Error('项目会话已切换')
           update({ currentProject: project })
           return project
         } catch (error) {
-          update({ currentProject: null })
+          if (current()) update({ currentProject: null })
           throw error
         }
       },

@@ -85,6 +85,7 @@ export interface EditorData {
   maxHistorySize: number
   originalScript: string
   projectId: number | null
+  projectOwnerKey: string | null
   props: ProjectPropVO[]
   scenes: ProjectSceneVO[]
   selectedShotIds: Set<number>
@@ -199,6 +200,7 @@ const initialData = (): EditorData => {
     maxHistorySize: 20,
     originalScript: '',
     projectId: null,
+    projectOwnerKey: null,
     props: [],
     scenes: [],
     selectedShotIds: new Set<number>(),
@@ -713,8 +715,10 @@ export const createEditorStore = (
       },
 
       async initProject(projectId) {
-        if (get().projectId !== projectId) update({ characterDescriptionCache: new Map(), localImageHistory: {} })
-        update({ loading: true, projectId })
+        const { userId, token } = useUserStore.getState()
+        const projectOwnerKey = JSON.stringify([userId, token])
+        if (get().projectId !== projectId || get().projectOwnerKey !== projectOwnerKey) get().reset()
+        update({ loading: true, projectId, projectOwnerKey })
         const current = captureScope()
         try {
           get().loadLocalImageHistory()
@@ -749,9 +753,9 @@ export const createEditorStore = (
         if (!projectId) return
         try {
           const stored = localStorage.getItem(`ai_story_studio_user_${useUserStore.getState().userId}_project_${projectId}_history`)
-          if (stored) update({ localImageHistory: JSON.parse(stored) as EditorData['localImageHistory'] })
+          update({ localImageHistory: stored ? JSON.parse(stored) as EditorData['localImageHistory'] : {} })
         } catch {
-          // Legacy behaviour ignores malformed or unavailable local storage.
+          update({ localImageHistory: {} })
         }
       },
 
@@ -836,6 +840,7 @@ export const createEditorStore = (
       },
 
       async pollActiveJobs() {
+        const current = captureScope()
         const jobs = get().activeJobs
         if (jobs.length === 0) return
 
@@ -850,6 +855,7 @@ export const createEditorStore = (
         for (const job of jobs) {
           try {
             const status = await dependencies.jobApi.getJobStatus(job.jobId)
+            if (!current()) return
             if (TERMINAL_JOB_STATUSES.has(status.status)) {
               finished.push(job)
               if (status.status === 'FAILED' || status.status === 'CANCELED') {
@@ -864,12 +870,13 @@ export const createEditorStore = (
           }
         }
 
-        if (finished.length === 0) return
+        if (!current() || finished.length === 0) return
 
         // A terminal failed Job is authoritative even if the shot endpoint still
         // reports NONE. Clear the optimistic spinner before fetchShots so its
         // stale-response merge cannot resurrect GENERATING forever.
         let shots = get().shots
+        if (!current()) return
         if (unsuccessful.length > 0) {
           const failedImages = new Set(
             unsuccessful.filter((job) => job.kind === 'shot-image').flatMap((job) => job.targetIds),
@@ -925,6 +932,7 @@ export const createEditorStore = (
           // A successful provider job is not visible to the user until its asset
           // refresh succeeds. Keep only those successful jobs for a retry; failed
           // targets were already settled locally above.
+          if (!current()) return
           const failedJobIds = new Set(unsuccessful.map((job) => job.jobId))
           update({
             activeJobs: [
@@ -937,6 +945,7 @@ export const createEditorStore = (
           }
           return
         }
+        if (!current()) return
         if (unsuccessful.length > 0) {
           const failedImages = new Set(
             unsuccessful.filter((job) => job.kind === 'shot-image').flatMap((job) => job.targetIds),
@@ -1000,22 +1009,11 @@ export const createEditorStore = (
       },
 
       reset() {
-        update({
-          activeJobs: [],
-          characterDescriptionCache: new Map(),
-          characters: [],
-          history: [],
-          historyIndex: -1,
-          loading: false,
-          localImageHistory: {},
-          projectId: null,
-          scenes: [],
-          selectedShotIds: new Set(),
-          shots: [],
-        })
+        update(initialData())
       },
 
       async resumeActiveJobs() {
+        const current = captureScope()
         const projectId = get().projectId
         if (!projectId) return
         // After a reload the optimistic GENERATING flags are gone. Rebuild the
@@ -1026,6 +1024,7 @@ export const createEditorStore = (
             dependencies.jobApi.getUserJobs({ page: 1, projectId, size: 100, status: 'RUNNING' }),
             dependencies.jobApi.getUserJobs({ page: 1, projectId, size: 100, status: 'PENDING' }),
           ])
+          if (!current()) return
           const restored: ActiveGenerationJob[] = []
           const seen = new Set<number>()
           for (const page of pages) {

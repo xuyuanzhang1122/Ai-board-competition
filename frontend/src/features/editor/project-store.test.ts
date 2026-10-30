@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { useUserStore } from '@/shared/store/user'
 import type { FolderVO, ProjectVO } from '@/shared/types/api'
 
 import { createProjectStore, type ProjectStoreApi } from './project-store'
@@ -106,4 +107,20 @@ describe('project Zustand store', () => {
     await expect(store.getState().fetchProjectDetail(2)).rejects.toBe(failure)
     expect(store.getState().currentProject).toBeNull()
   })
+})
+
+it('does not restore A project detail after a B session has loaded its authorized detail', async () => {
+  const originalIdentity = useUserStore.getState()
+  useUserStore.setState({ userId: 1, token: 'late-A' })
+  let finishA!: (value: ProjectVO) => void
+  const api = createApi()
+  api.getProject = vi.fn().mockImplementationOnce(() => new Promise<ProjectVO>((resolve) => { finishA = resolve })).mockResolvedValueOnce(project(7, null, 'B授权项目'))
+  const store = createProjectStore(api)
+  const pendingA = store.getState().fetchProjectDetail(7)
+  useUserStore.setState({ userId: 2, token: 'late-B' })
+  await store.getState().fetchProjectDetail(7)
+  finishA(project(7, null, 'A旧项目'))
+  await expect(pendingA).rejects.toThrow('项目会话已切换')
+  expect(store.getState().currentProject?.name).toBe('B授权项目')
+  useUserStore.setState({ userId: originalIdentity.userId, token: originalIdentity.token })
 })

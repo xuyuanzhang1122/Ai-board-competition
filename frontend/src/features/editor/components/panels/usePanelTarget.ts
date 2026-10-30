@@ -6,6 +6,7 @@ import { useEditorStore } from '../../store'
 import { createPanelDrafts, createTargetLease, panelTargetKey } from './panel-target'
 
 const drafts = createPanelDrafts()
+export const hasPanelDraft = (key: string, field: string) => drafts.has(key, field)
 export function usePanelDraft<T>(key: string, field: string, initial: T | (() => T)): [T, Dispatch<SetStateAction<T>>] {
   const [value, setValue] = useState<T>(() => drafts.get(key, field, typeof initial === 'function' ? (initial as () => T)() : initial))
   const valueRef = useRef(value)

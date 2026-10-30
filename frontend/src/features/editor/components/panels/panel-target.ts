@@ -4,6 +4,7 @@ export const panelTargetKey = (userId: number | null, projectId: number | null, 
 export function createPanelDrafts() {
   const values = new Map<string, Map<string, unknown>>()
   return {
+    has(key: string, field: string) { return values.get(key)?.has(field) ?? false },
     get<T>(key: string, field: string, fallback: T): T {
       return values.get(key)?.has(field) ? values.get(key)!.get(field) as T : fallback
     },

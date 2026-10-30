@@ -5,7 +5,7 @@ import { useUserStore } from '@/shared/store/user'
 import { textGenerationApi } from '../../../api'
 import { useEditorStore } from '../../../store'
 import { guardTargetDependencies } from '../panel-target'
-import { usePanelDraft, usePanelTarget } from '../usePanelTarget'
+import { hasPanelDraft, usePanelDraft, usePanelTarget } from '../usePanelTarget'
 import type { EditableAssetType } from './types'
 
 export interface DescriptionParserInput {
@@ -132,7 +132,7 @@ export function useAssetDescriptionParser(
 ) {
   const target = usePanelTarget(`description-${input.assetType}`, input.assetName)
   const [aiDescription, setAiDescription] = usePanelDraft(input.draftKey ?? target.key, 'description', input.existingDescription ?? '')
-  const editedRef = useRef(Boolean(aiDescription))
+  const editedRef = useRef(hasPanelDraft(input.draftKey ?? target.key, 'description') || Boolean(aiDescription))
   const changeDescription = useCallback((value: string) => { editedRef.current = true; setAiDescription(value) }, [setAiDescription])
   const [isParsing, setIsParsing] = useState(false)
   const [parseError, setParseError] = useState(false)

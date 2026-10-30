@@ -597,3 +597,15 @@ it('discards an old account asset response even when project id matches', async 
   expect(store.getState().characters).toEqual([])
   useUserStore.setState({ userId: identity.userId, token: identity.token })
 })
+
+it('replaces in-memory local history when the current owner has no stored history', () => {
+  const store = createEditorStore({}, { projectId: 7, localImageHistory: { character_11: [{ id: 1 } as never] } })
+  store.getState().loadLocalImageHistory()
+  expect(store.getState().localImageHistory).toEqual({})
+})
+
+it('resets every owned data collection, including props and source text', () => {
+  const store = createEditorStore({}, { projectId: 7, props: [{ id: 1 } as never], originalScript: 'A私有正文', characters: [{ id: 2 } as never], shots: [makeShot(3, 1)] })
+  store.getState().reset()
+  expect(store.getState()).toMatchObject({ projectId: null, projectOwnerKey: null, props: [], originalScript: '', shots: [], characters: [], activeJobs: [], localImageHistory: {} })
+})
