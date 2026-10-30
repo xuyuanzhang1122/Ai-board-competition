@@ -28,11 +28,13 @@ import {
   saveExpiringHistory,
   uploadReferenceImage,
 } from './generation-helpers'
+import { mediaUnavailableMessage } from './panel-target'
 import {
   generateShotImages,
   type ShotImageAspectRatio,
   shotImageHistoryKey,
 } from './shot-image-generation'
+import { usePanelDraft, usePanelTarget } from './usePanelTarget'
 
 interface ShotImageHistoryItem {
   expiresAt: number
@@ -55,8 +57,10 @@ export function ShotImageGeneratePanel({ onClose, shotId, shotNo }: ShotImageGen
   const { loading: modelsLoading, models } = useAvailableModels('IMAGE')
   const shot = useEditorStore((state) => state.shots.find((item) => item.id === shotId))
 
-  const [model, setModel] = useState(configuredModel)
-  const [aspectRatio, setAspectRatio] = useState<ShotImageAspectRatio>(() =>
+  const target = usePanelTarget('image', shotId)
+  const unavailableMessage = mediaUnavailableMessage(modelsLoading, models)
+  const [model, setModel] = usePanelDraft(target.key, 'model', configuredModel)
+  const [aspectRatio, setAspectRatio] = usePanelDraft<ShotImageAspectRatio>(target.key, 'aspectRatio', () =>
     (getModelAspectRatios('IMAGE', configuredModel)[0] || '1:1') as ShotImageAspectRatio,
   )
   const [history, setHistory] = useState<ShotImageHistoryItem[]>([])
@@ -64,13 +68,13 @@ export function ShotImageGeneratePanel({ onClose, shotId, shotNo }: ShotImageGen
   const [isUploading, setIsUploading] = useState(false)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [progress, setProgress] = useState(0)
-  const [quantity, setQuantity] = useState(1)
-  const [referenceImageUrl, setReferenceImageUrl] = useState<string | null>(null)
+  const [quantity, setQuantity] = usePanelDraft(target.key, 'quantity', 1)
+  const [referenceImageUrl, setReferenceImageUrl] = usePanelDraft<string | null>(target.key, 'reference', null)
   const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
   const localInputRef = useRef<HTMLInputElement>(null)
   const referenceInputRef = useRef<HTMLInputElement>(null)
-  const storageKey = useMemo(() => shotImageHistoryKey(shotId), [shotId])
+  const storageKey = useMemo(() => `${shotImageHistoryKey(shotId)}:${target.key}`, [shotId, target.key])
 
   useEffect(() => {
     if (models.length === 0) return
@@ -82,7 +86,7 @@ export function ShotImageGeneratePanel({ onClose, shotId, shotNo }: ShotImageGen
     if (!ratios.includes(aspectRatio) && ratios[0]) {
       setAspectRatio(ratios[0] as ShotImageAspectRatio)
     }
-  }, [aspectRatio, configuredModel, model, models])
+  }, [aspectRatio, configuredModel, model, models, setAspectRatio, setModel])
 
   /* eslint-disable @eslint-react/hooks-extra/no-direct-set-state-in-use-effect -- panel remount/reset follows the typed panel key and shot identity */
   useEffect(() => {
@@ -104,7 +108,7 @@ export function ShotImageGeneratePanel({ onClose, shotId, shotNo }: ShotImageGen
   )
 
   const handleGenerate = async () => {
-    if (!projectId || !shot || !model || isGenerating) {
+    if (!target.current() || unavailableMessage || !models.some((item) => item.code === model) || !projectId || !shot || !model || isGenerating) {
       if (!projectId || !shot) defaultNotifier.error('分镜数据尚未加载')
       return
     }
@@ -127,16 +131,16 @@ export function ShotImageGeneratePanel({ onClose, shotId, shotNo }: ShotImageGen
         {
           generateSingleShot: async (...args) => {
             const response = await generationApi.generateSingleShot(...args)
-            if (response.jobId) registerGenerationJob(response.jobId, 'shot-image', [shotId])
+            if (target.current() && response.jobId) registerGenerationJob(response.jobId, 'shot-image', [shotId])
             return response
           },
           getJobStatus: jobApi.getJobStatus,
           mergeImages: imageUtilApi.mergeImages,
-          onProgress: (job) => setProgress(job.progress ?? 0),
+          onProgress: (job) => { if (target.current()) setProgress(job.progress ?? 0) },
           signal: abortRef.current.signal,
         },
       )
-      if (results.length === 0) return
+      if (!target.current() || results.length === 0) return
 
       const createdAt = Date.now()
       const newRecords = results.flatMap((result) =>
@@ -152,12 +156,15 @@ export function ShotImageGeneratePanel({ onClose, shotId, shotNo }: ShotImageGen
       commitHistory([...newRecords, ...history])
       setPreviewUrl(newRecords[0]?.imageUrl ?? null)
       setSelectedHistoryId(newRecords[0]?.id ?? null)
+      if (!target.current()) return
       await refreshShots([shotId])
+      if (!target.current()) return
       defaultNotifier.success(`已生成 ${newRecords.length} 张分镜图并自动应用`)
     } catch (error) {
+      if (!target.current()) return
       defaultNotifier.error(error instanceof Error ? error.message : '分镜图生成失败')
     } finally {
-      setIsGenerating(false)
+      if (target.current()) setIsGenerating(false)
     }
   }
 
@@ -168,12 +175,14 @@ export function ShotImageGeneratePanel({ onClose, shotId, shotNo }: ShotImageGen
     setIsUploading(true)
     try {
       const url = await uploadReferenceImage(file)
+      if (!target.current()) return
       setReferenceImageUrl(url)
       defaultNotifier.success('参考图上传成功')
     } catch (error) {
+      if (!target.current()) return
       defaultNotifier.error(error instanceof Error ? error.message : '参考图上传失败')
     } finally {
-      setIsUploading(false)
+      if (target.current()) setIsUploading(false)
     }
   }
 
@@ -184,18 +193,22 @@ export function ShotImageGeneratePanel({ onClose, shotId, shotNo }: ShotImageGen
     setIsUploading(true)
     try {
       const imageUrl = await uploadReferenceImage(file)
+      if (!target.current()) return
       setPreviewUrl(imageUrl)
       if (shot?.shotImage.assetId) {
         await assetApi.uploadFromUrl(shot.shotImage.assetId, imageUrl)
+        if (!target.current()) return
         await refreshShots([shotId])
+        if (!target.current()) return
         defaultNotifier.success('本地图片已应用到分镜')
       } else {
         defaultNotifier.warning('图片已上传；分镜资产需先完成一次 AI 生成后才能应用')
       }
     } catch (error) {
+      if (!target.current()) return
       defaultNotifier.error(error instanceof Error ? error.message : '本地图片上传失败')
     } finally {
-      setIsUploading(false)
+      if (target.current()) setIsUploading(false)
     }
   }
 
@@ -208,9 +221,12 @@ export function ShotImageGeneratePanel({ onClose, shotId, shotNo }: ShotImageGen
     }
     try {
       await assetApi.uploadFromUrl(shot.shotImage.assetId, record.imageUrl)
+      if (!target.current()) return
       await refreshShots([shotId])
+      if (!target.current()) return
       defaultNotifier.success('历史图片已应用到分镜')
     } catch (error) {
+      if (!target.current()) return
       defaultNotifier.error(error instanceof Error ? error.message : '应用历史图片失败')
     }
   }
@@ -256,6 +272,7 @@ export function ShotImageGeneratePanel({ onClose, shotId, shotNo }: ShotImageGen
       </header>
 
       <div className="space-y-6 p-6">
+        {unavailableMessage ? <p className="text-sm text-slate-500" role="status">{unavailableMessage}</p> : null}
         <div className="group relative flex aspect-video items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
           {previewUrl ? (
             <img alt={`分镜 ${shotNo} 预览`} className="size-full object-cover" src={previewUrl} />

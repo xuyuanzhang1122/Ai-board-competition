@@ -7,6 +7,8 @@ import { uploadApi } from '@/shared/api/upload'
 
 import { characterApi, propApi, sceneApi, shotApi } from '../../../api'
 import { useEditorStore } from '../../../store'
+import { guardTargetDependencies } from '../panel-target'
+import { usePanelTarget } from '../usePanelTarget'
 import type { AssetLocalUploadInput, LocalUploadDeps } from './asset-local-upload'
 import { runLocalImageUpload } from './asset-local-upload'
 import { defaultNotifier } from './notifier'
@@ -18,6 +20,7 @@ export interface AssetLocalTabProps extends AssetLocalUploadInput {
 
 export function AssetLocalTab(props: AssetLocalTabProps) {
   const { projectId } = props
+  const target = usePanelTarget(`upload-${props.assetType}`, props.assetId ?? props.assetName ?? 'new')
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isUploading, setIsUploading] = useState(false)
 
@@ -28,9 +31,11 @@ export function AssetLocalTab(props: AssetLocalTabProps) {
 
     setIsUploading(true)
     try {
-      await runLocalImageUpload(props, file, createLocalUploadDeps())
+      await runLocalImageUpload(props, file, guardTargetDependencies(createLocalUploadDeps(), target.current))
+    } catch {
+      // The upload pipeline reports current-target errors; stale operations stop quietly.
     } finally {
-      setIsUploading(false)
+      if (target.current()) setIsUploading(false)
     }
   }
 

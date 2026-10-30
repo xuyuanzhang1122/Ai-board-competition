@@ -23,6 +23,8 @@ import {
   GenerationJobTimeoutError,
   pollGenerationJob,
 } from '../generation-helpers'
+import { guardTargetDependencies } from '../panel-target'
+import { usePanelTarget } from '../usePanelTarget'
 import { defaultNotifier, type Notifier } from './notifier'
 import type { EditableAssetType } from './types'
 import { isValidThumbnailUrl } from './useAssetHistory'
@@ -435,12 +437,11 @@ export function useAssetGeneration(
   const [error, setError] = useState<Error | null>(null)
   const abortRef = useRef<AbortController | null>(null)
 
+  const target = usePanelTarget('generate', input.assetId ?? 'new')
+
   const resolvedDeps = useMemo<AssetGenerationDeps>(
-    () => ({
-      ...createDefaultDeps(),
-      ...deps,
-    }),
-    [deps],
+    () => guardTargetDependencies({ ...createDefaultDeps(), ...deps }, target.current),
+    [deps, target],
   )
 
   useEffect(() => {
@@ -466,16 +467,18 @@ export function useAssetGeneration(
       const result = await runAssetGeneration(input, resolvedDeps, {
         signal: abortRef.current.signal,
       })
+      if (!target.current()) return
       setGeneratedImageUrl(result.generatedImageUrl)
       setError(result.error)
     } catch (err) {
+      if (!target.current()) return
       const message = err instanceof Error ? err.message : 'AI生成失败'
       resolvedDeps.notifier.error(message)
       setError(err instanceof Error ? err : new Error(message))
     } finally {
-      setIsGenerating(false)
+      if (target.current()) setIsGenerating(false)
     }
-  }, [input, resolvedDeps])
+  }, [input, resolvedDeps, target])
 
   const resetGeneratedState = useCallback(() => {
     setGeneratedImageUrl(null)

@@ -8,6 +8,7 @@ import type {
 
 import type { LocalImageHistoryRecord } from '../../../store'
 import { useEditorStore } from '../../../store'
+import { usePanelTarget } from '../usePanelTarget'
 import type { CombinedHistoryItem, EditableAssetType } from './types'
 import { aggregateSameNameAssetIds } from './useAssetLibraryAssets'
 
@@ -165,13 +166,15 @@ export function useAssetHistory(
 
   const [history, setHistory] = useState<CombinedHistoryItem[]>([])
   const [loadingHistory, setLoadingHistory] = useState(false)
+  const target = usePanelTarget(`history-${assetType}`, assetId ?? assetName)
   const requestIdRef = useRef(0)
 
   useEffect(() => {
     requestIdRef.current += 1
     setHistory([])
     setLoadingHistory(false)
-  }, [assetId, assetName, assetType])
+    return () => { requestIdRef.current += 1 }
+  }, [assetId, assetName, assetType, projectId, target])
 
   const loadHistory = useCallback(async () => {
     if (!projectId) return
@@ -181,7 +184,7 @@ export function useAssetHistory(
       if (assetType === 'character') await fetchCharacters()
       else if (assetType === 'scene') await fetchScenes()
       else await fetchProps()
-      if (requestId !== requestIdRef.current) return
+      if (requestId !== requestIdRef.current || !target.current()) return
       const state = useEditorStore.getState()
       setHistory(
         selectAssetHistory(
@@ -206,6 +209,7 @@ export function useAssetHistory(
     fetchCharacters,
     fetchScenes,
     fetchProps,
+    target,
   ])
 
   return { history, loadingHistory, loadHistory }

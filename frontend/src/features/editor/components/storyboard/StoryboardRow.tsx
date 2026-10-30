@@ -32,7 +32,6 @@ export interface AssetGenerateDialogRequest {
 
 export interface StoryboardRowProps {
   assetDialogs?: {
-    openGeneration: (request: AssetGenerateDialogRequest) => void
     openVersions: (request: AssetVersionDialogRequest) => void
   }
   isFirst: boolean
@@ -64,10 +63,6 @@ function StoryboardRowImpl({
   const bindings = useShotAssetBindings(shot)
 
   const openGeneration = (assetType: ShotMediaType) => {
-    if (assetDialogs) {
-      assetDialogs.openGeneration({ assetType, shotId: shot.id, shotNo: shot.shotNo })
-      return
-    }
     const panelType = assetType === 'shot-image' ? 'shot-image-generate' : 'video-generate'
     openPanel(panelType, { shotId: shot.id, shotNo: shot.shotNo })
   }

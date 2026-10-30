@@ -1,5 +1,10 @@
+import { useEffect } from 'react'
+
+import { useUserStore } from '@/shared/store/user'
+
 import type { PanelDataByType } from '../panel-manager-store'
 import { usePanelManagerStore } from '../panel-manager-store'
+import { useEditorStore } from '../store'
 import { AssetEditPanel } from './panels/asset-edit/AssetEditPanel'
 import { DefaultPanel } from './panels/DefaultPanel'
 import { HistoryPanel } from './panels/HistoryPanel'
@@ -54,9 +59,27 @@ export function RightPanelManager({
   const panelKey = usePanelManagerStore((state) => state.panelKey)
   const closePanel = usePanelManagerStore((state) => state.closePanel)
 
-  return createRightPanelElement(
+  useEffect(() => {
+    const resetScope = () => usePanelManagerStore.setState({
+      currentPanelType: 'default', panelData: {}, defaultPanelData: {},
+      panelKey: usePanelManagerStore.getState().panelKey + 1,
+    })
+    const unsubscribeUser = useUserStore.subscribe((state, previous) => {
+      if (state.userId !== previous.userId || state.token !== previous.token) resetScope()
+    })
+    const unsubscribeProject = useEditorStore.subscribe((state, previous) => {
+      if (state.projectId !== previous.projectId) resetScope()
+    })
+    return () => { unsubscribeUser(); unsubscribeProject() }
+  }, [])
+
+  const userId = useUserStore((state) => state.userId)
+  const token = useUserStore((state) => state.token)
+  const projectId = useEditorStore((state) => state.projectId)
+
+  return <div key={JSON.stringify([userId, token, projectId])}>{createRightPanelElement(
     { currentPanelType, panelData, panelKey },
     closePanel,
     components,
-  )
+  )}</div>
 }

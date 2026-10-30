@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import { useUserStore } from '@/shared/store/user'
 import type {
   AssetStatusVO,
   BatchGenerateResponse,
@@ -573,4 +574,26 @@ describe('editor Zustand store actions', () => {
     store.getState().deleteLocalImageHistory('character', 5, newer.id, 11)
     expect(store.getState().getLocalImageHistory('character', 5, 11)).toEqual([older])
   })
+})
+
+it('discards an old project asset response after switching the editor project', async () => {
+  let resolve!: (value: Awaited<ReturnType<typeof characterApi.getProjectCharacters>>) => void
+  const store = createEditorStore({ characterApi: { ...characterApi, getProjectCharacters: vi.fn(() => new Promise<Awaited<ReturnType<typeof characterApi.getProjectCharacters>>>((done) => { resolve = done })) } }, { projectId: 1 })
+  const pending = store.getState().fetchCharacters()
+  store.setState({ projectId: 2 })
+  resolve([{ id: 77 } as Awaited<ReturnType<typeof characterApi.getProjectCharacters>>[number]])
+  await pending
+  expect(store.getState().characters).toEqual([])
+})
+
+it('discards an old account asset response even when project id matches', async () => {
+  let resolve!: (value: Awaited<ReturnType<typeof characterApi.getProjectCharacters>>) => void
+  const store = createEditorStore({ characterApi: { ...characterApi, getProjectCharacters: vi.fn(() => new Promise<Awaited<ReturnType<typeof characterApi.getProjectCharacters>>>((done) => { resolve = done })) } }, { projectId: 1 })
+  const pending = store.getState().fetchCharacters()
+  const identity = useUserStore.getState()
+  useUserStore.setState({ userId: 99, token: 'different-session' })
+  resolve([{ id: 88 } as Awaited<ReturnType<typeof characterApi.getProjectCharacters>>[number]])
+  await pending
+  expect(store.getState().characters).toEqual([])
+  useUserStore.setState({ userId: identity.userId, token: identity.token })
 })

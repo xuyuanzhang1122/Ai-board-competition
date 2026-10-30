@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { guardTargetDependencies } from '../panel-target'
 import { type LocalUploadDeps, runLocalImageUpload } from './asset-local-upload'
 import type { AssetGenerationDeps, AssetGenerationInput } from './useAssetGeneration'
 import { DEFAULT_MODELS, runAssetGeneration } from './useAssetGeneration'
@@ -383,4 +384,20 @@ describe('AssetLocalTab URL.revokeObjectURL', () => {
     createSpy.mockRestore()
     revokeSpy.mockRestore()
   })
+})
+
+it('drops a late asset generation acceptance before registering it in another target', async () => {
+  let accept!: (job: Awaited<ReturnType<AssetGenerationDeps['generationApi']['generateSingleCharacter']>>) => void
+  let active = true
+  const deps = createGenerationDeps()
+  deps.generationApi.generateSingleCharacter = vi.fn(() => new Promise<Awaited<ReturnType<AssetGenerationDeps['generationApi']['generateSingleCharacter']>>>((resolve) => { accept = resolve }))
+  const guarded = guardTargetDependencies(deps, () => active)
+  const operation = runAssetGeneration(baseInput, guarded)
+  // Description persistence precedes generation submission.
+  await vi.waitFor(() => expect(accept).toBeTypeOf('function'))
+  active = false
+  accept({ jobId: 777 } as Awaited<ReturnType<AssetGenerationDeps['generationApi']['generateSingleCharacter']>>)
+  await expect(operation).rejects.toThrow('目标已切换')
+  expect(deps.registerGenerationJob).not.toHaveBeenCalled()
+  expect(deps.addLocalImageHistory).not.toHaveBeenCalled()
 })

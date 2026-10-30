@@ -136,7 +136,10 @@ export function DefaultPanel({
           block
           options={TAB_OPTIONS}
           value={activeTab}
-          onChange={(value) => setActiveTab(value as DefaultPanelTab)}
+          onChange={(value) => {
+            setActiveTab(value as DefaultPanelTab)
+            usePanelManagerStore.getState().updatePanelData({ activeTab: value as DefaultPanelTab })
+          }}
         />
       </div>
 

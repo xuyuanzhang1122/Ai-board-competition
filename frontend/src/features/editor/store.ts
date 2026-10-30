@@ -1,6 +1,7 @@
 /* eslint-disable unicorn/prefer-structured-clone -- legacy history intentionally uses JSON snapshots */
 import { create, type StoreApi, type UseBoundStore } from 'zustand'
 
+import { useUserStore } from '@/shared/store/user'
 import type {
   AssetVersionVO,
   BatchGenerateRequest,
@@ -275,6 +276,13 @@ export const createEditorStore = (
       })
     }
 
+    const captureScope = () => {
+      const projectId = get().projectId
+      const { userId, token } = useUserStore.getState()
+      return () => get().projectId === projectId &&
+        useUserStore.getState().userId === userId && useUserStore.getState().token === token
+    }
+
     const notifyError = (error: unknown, fallback: string) =>
       dependencies.notifier.error(errorMessage(error, fallback))
 
@@ -494,10 +502,13 @@ export const createEditorStore = (
       async fetchCharacters() {
         const projectId = get().projectId
         if (!projectId) return
+        const current = captureScope()
         try {
           const fetched = await dependencies.characterApi.getProjectCharacters(projectId)
+          if (!current()) return
           update({ characters: preserveArrayIdentity(get().characters, fetched) })
         } catch {
+          if (!current()) return
           update({ characters: [] })
         }
       },
@@ -505,10 +516,13 @@ export const createEditorStore = (
       async fetchProps() {
         const projectId = get().projectId
         if (!projectId) return
+        const current = captureScope()
         try {
           const fetched = await dependencies.propApi.getProjectProps(projectId)
+          if (!current()) return
           update({ props: preserveArrayIdentity(get().props, fetched) })
         } catch {
+          if (!current()) return
           update({ props: [] })
         }
       },
@@ -516,10 +530,13 @@ export const createEditorStore = (
       async fetchScenes() {
         const projectId = get().projectId
         if (!projectId) return
+        const current = captureScope()
         try {
           const fetched = await dependencies.sceneApi.getProjectScenes(projectId)
+          if (!current()) return
           update({ scenes: preserveArrayIdentity(get().scenes, fetched) })
         } catch {
+          if (!current()) return
           update({ scenes: [] })
         }
       },
@@ -527,7 +544,9 @@ export const createEditorStore = (
       async fetchShots() {
         const projectId = get().projectId
         if (!projectId) return
+        const current = captureScope()
         const fetched = await dependencies.shotApi.getProjectShots(projectId)
+        if (!current()) return
         const prev = get().shots
 
         // The backend derives shot asset status from Asset/AssetVersion tables.
@@ -578,7 +597,9 @@ export const createEditorStore = (
         // Only the affected shots are refetched and merged by id; every other shot
         // keeps its exact reference so its row/cells never re-render. Throws on
         // network error so the caller (pollActiveJobs) can retry next tick.
+        const current = captureScope()
         const fetched = await dependencies.shotApi.getProjectShots(projectId, ids)
+        if (!current()) return
         const fetchedById = new Map(fetched.map((shot) => [shot.id, shot]))
         const prev = get().shots
         let changed = false
@@ -692,7 +713,9 @@ export const createEditorStore = (
       },
 
       async initProject(projectId) {
+        if (get().projectId !== projectId) update({ characterDescriptionCache: new Map(), localImageHistory: {} })
         update({ loading: true, projectId })
+        const current = captureScope()
         try {
           get().loadLocalImageHistory()
           get().cleanExpiredHistory()
@@ -702,12 +725,13 @@ export const createEditorStore = (
             get().fetchScenes(),
             get().fetchProps(),
           ])
+          if (!current()) return
           get().saveHistory()
           // Resume tracking any generation still running on the server so a
           // page reload mid-generation doesn't lose the spinner/result.
           await get().resumeActiveJobs()
         } finally {
-          update({ loading: false })
+          if (current()) update({ loading: false })
         }
       },
 
@@ -724,7 +748,7 @@ export const createEditorStore = (
         const projectId = get().projectId
         if (!projectId) return
         try {
-          const stored = localStorage.getItem(`ai_story_studio_project_${projectId}_history`)
+          const stored = localStorage.getItem(`ai_story_studio_user_${useUserStore.getState().userId}_project_${projectId}_history`)
           if (stored) update({ localImageHistory: JSON.parse(stored) as EditorData['localImageHistory'] })
         } catch {
           // Legacy behaviour ignores malformed or unavailable local storage.
@@ -978,6 +1002,7 @@ export const createEditorStore = (
       reset() {
         update({
           activeJobs: [],
+          characterDescriptionCache: new Map(),
           characters: [],
           history: [],
           historyIndex: -1,
@@ -1047,7 +1072,7 @@ export const createEditorStore = (
         if (!state.projectId) return
         try {
           localStorage.setItem(
-            `ai_story_studio_project_${state.projectId}_history`,
+            `ai_story_studio_user_${useUserStore.getState().userId}_project_${state.projectId}_history`,
             JSON.stringify(state.localImageHistory),
           )
         } catch {

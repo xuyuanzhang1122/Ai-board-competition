@@ -18,6 +18,8 @@ import {
   pollGenerationJob,
   saveExpiringHistory,
 } from './generation-helpers'
+import { mediaUnavailableMessage } from './panel-target'
+import { usePanelDraft, usePanelTarget } from './usePanelTarget'
 import {
   buildVideoGenerationRequest,
   getVideoFallbackThumbnail,
@@ -51,15 +53,17 @@ export function VideoGeneratePanel({ onClose, shotId, shotNo }: VideoGeneratePan
   const { loading: modelsLoading, models } = useAvailableModels('VIDEO')
   const shot = useEditorStore((state) => state.shots.find((item) => item.id === shotId))
 
-  const [model, setModel] = useState(configuredModel)
-  const [duration, setDuration] = useState<VideoDuration>(() => getVideoDurations(configuredModel)[0] || 5)
+  const target = usePanelTarget('video', shotId)
+  const unavailableMessage = mediaUnavailableMessage(modelsLoading, models)
+  const [model, setModel] = usePanelDraft(target.key, 'model', configuredModel)
+  const [duration, setDuration] = usePanelDraft<VideoDuration>(target.key, 'duration', () => getVideoDurations(configuredModel)[0] || 5)
   const [history, setHistory] = useState<VideoHistoryItem[]>([])
   const [isGenerating, setIsGenerating] = useState(false)
   const [previewItem, setPreviewItem] = useState<VideoHistoryItem | null>(null)
   const [progress, setProgress] = useState(0)
-  const [size, setSize] = useState<VideoSize>(() => getVideoResolutions(configuredModel)[0] || '854x480')
+  const [size, setSize] = usePanelDraft<VideoSize>(target.key, 'size', () => getVideoResolutions(configuredModel)[0] || '854x480')
   const abortRef = useRef<AbortController | null>(null)
-  const storageKey = useMemo(() => videoHistoryKey(shotId), [shotId])
+  const storageKey = useMemo(() => `${videoHistoryKey(shotId)}:${target.key}`, [shotId, target.key])
   const sceneAssetError = getVideoSceneAssetError(shot)
 
   useEffect(() => {
@@ -72,7 +76,7 @@ export function VideoGeneratePanel({ onClose, shotId, shotNo }: VideoGeneratePan
     const resolutions = getVideoResolutions(nextModel)
     if (!durations.includes(duration) && durations[0]) setDuration(durations[0])
     if (!resolutions.includes(size) && resolutions[0]) setSize(resolutions[0])
-  }, [configuredModel, duration, model, models, size])
+  }, [configuredModel, duration, model, models, size, setDuration, setModel, setSize])
 
   const commitHistory = useCallback(
     (records: VideoHistoryItem[]) => {
@@ -91,16 +95,17 @@ export function VideoGeneratePanel({ onClose, shotId, shotNo }: VideoGeneratePan
     abortRef.current = new AbortController()
 
     void hydrateMissingJobUrls(loaded, jobApi.getJobStatus).then((hydrated) => {
+      if (!target.current()) return
       setHistory(hydrated)
       saveExpiringHistory(storageKey, hydrated)
     })
 
     return () => abortRef.current?.abort()
-  }, [storageKey])
+  }, [storageKey, target])
   /* eslint-enable @eslint-react/hooks-extra/no-direct-set-state-in-use-effect */
 
   const handleGenerate = async () => {
-    if (!projectId || !shot || !model || isGenerating) {
+    if (!target.current() || unavailableMessage || !models.some((item) => item.code === model) || !projectId || !shot || !model || isGenerating) {
       if (!projectId || !shot) defaultNotifier.error('分镜数据尚未加载')
       return
     }
@@ -121,6 +126,7 @@ export function VideoGeneratePanel({ onClose, shotId, shotNo }: VideoGeneratePan
         size,
       })
       const response = await generationApi.generateSingleShotVideo(projectId, shot.id, request)
+      if (!target.current()) return
       if (!response.jobId) throw new Error('视频生成任务缺少 jobId')
       registerGenerationJob(response.jobId, 'video', [shot.id])
 
@@ -140,22 +146,25 @@ export function VideoGeneratePanel({ onClose, shotId, shotNo }: VideoGeneratePan
 
       const job = await pollGenerationJob(response.jobId, {
         getJobStatus: jobApi.getJobStatus,
-        onProgress: (value) => setProgress(value.progress ?? 0),
+        onProgress: (value) => { if (target.current()) setProgress(value.progress ?? 0) },
         signal: abortRef.current.signal,
       })
-      if (!job) return
+      if (!target.current() || !job) return
       if (!job.resultUrl) throw new Error('视频已生成，但任务未返回播放地址')
 
       const completed = { ...pending, resultUrl: job.resultUrl }
       const nextHistory = [completed, ...history.filter((item) => item.id !== completed.id)]
       commitHistory(nextHistory)
       setPreviewItem(completed)
+      if (!target.current()) return
       await refreshShots([shotId])
+      if (!target.current()) return
       defaultNotifier.success('视频生成完成')
     } catch (error) {
+      if (!target.current()) return
       defaultNotifier.error(error instanceof Error ? error.message : '视频生成失败')
     } finally {
-      setIsGenerating(false)
+      if (target.current()) setIsGenerating(false)
     }
   }
 
@@ -168,9 +177,12 @@ export function VideoGeneratePanel({ onClose, shotId, shotNo }: VideoGeneratePan
     if (!shot?.video.assetId) return
     try {
       await assetApi.uploadFromUrl(shot.video.assetId, record.resultUrl)
+      if (!target.current()) return
       await refreshShots([shotId])
+      if (!target.current()) return
       defaultNotifier.success('历史视频已应用到分镜')
     } catch (error) {
+      if (!target.current()) return
       defaultNotifier.error(error instanceof Error ? error.message : '应用视频失败')
     }
   }
@@ -206,6 +218,7 @@ export function VideoGeneratePanel({ onClose, shotId, shotNo }: VideoGeneratePan
       </header>
 
       <div className="space-y-6 p-6">
+        {unavailableMessage ? <p className="text-sm text-slate-500" role="status">{unavailableMessage}</p> : null}
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
           <div className="flex aspect-video items-center justify-center">
             {previewItem?.resultUrl ? (
@@ -316,7 +329,7 @@ export function VideoGeneratePanel({ onClose, shotId, shotNo }: VideoGeneratePan
 
         <Button
           block
-          disabled={modelsLoading || models.length === 0 || Boolean(sceneAssetError)}
+          disabled={Boolean(unavailableMessage) || !models.some((item) => item.code === model) || Boolean(sceneAssetError)}
           loading={isGenerating}
           type="primary"
           onClick={() => void handleGenerate()}

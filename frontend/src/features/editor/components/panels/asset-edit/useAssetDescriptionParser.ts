@@ -1,12 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import { useUserStore } from '@/shared/store/user'
+
 import { textGenerationApi } from '../../../api'
 import { useEditorStore } from '../../../store'
+import { guardTargetDependencies } from '../panel-target'
+import { usePanelDraft, usePanelTarget } from '../usePanelTarget'
 import type { EditableAssetType } from './types'
 
 export interface DescriptionParserInput {
   assetName: string
   assetType: EditableAssetType
+  draftKey?: string
   existingDescription?: string | null
   languageModel?: string
   prefillDescription?: string
@@ -109,32 +114,34 @@ export const runDescriptionParse = async (
   }
 }
 
+const cacheKey = (name: string) => JSON.stringify([useUserStore.getState().userId, useEditorStore.getState().projectId, name])
+
 const createDefaultDeps = (): DescriptionParserDeps => ({
   cacheCharacterDescription: (name, description) => {
-    useEditorStore.getState().cacheCharacterDescription(name, description)
+    useEditorStore.getState().cacheCharacterDescription(cacheKey(name), description)
   },
   generateText: (prompt, projectId, options) =>
     textGenerationApi.describeAsset(prompt, projectId, options),
   getCachedCharacterDescription: (name) =>
-    useEditorStore.getState().characterDescriptionCache.get(name),
+    useEditorStore.getState().characterDescriptionCache.get(cacheKey(name)),
 })
 
 export function useAssetDescriptionParser(
   input: DescriptionParserInput,
   deps?: Partial<DescriptionParserDeps>,
 ) {
-  const [aiDescription, setAiDescription] = useState('')
+  const target = usePanelTarget(`description-${input.assetType}`, input.assetName)
+  const [aiDescription, setAiDescription] = usePanelDraft(input.draftKey ?? target.key, 'description', input.existingDescription ?? '')
+  const editedRef = useRef(Boolean(aiDescription))
+  const changeDescription = useCallback((value: string) => { editedRef.current = true; setAiDescription(value) }, [setAiDescription])
   const [isParsing, setIsParsing] = useState(false)
   const [parseError, setParseError] = useState(false)
   const [retryKey, setRetryKey] = useState(0)
   const abortRef = useRef<AbortController | null>(null)
 
   const resolvedDeps = useMemo<DescriptionParserDeps>(
-    () => ({
-      ...createDefaultDeps(),
-      ...deps,
-    }),
-    [deps],
+    () => guardTargetDependencies({ ...createDefaultDeps(), ...deps }, target.current),
+    [deps, target],
   )
 
   useEffect(() => {
@@ -146,9 +153,10 @@ export function useAssetDescriptionParser(
     setIsParsing(true)
     setParseError(false)
 
+    if (editedRef.current) { setIsParsing(false); return () => abortController.abort() }
     runDescriptionParse(input, resolvedDeps, abortController.signal)
       .then(({ description, parseError: nextParseError }) => {
-        if (!active) return
+        if (!active || !target.current() || editedRef.current) return
         setAiDescription(description)
         setParseError(nextParseError)
       })
@@ -170,9 +178,11 @@ export function useAssetDescriptionParser(
     input.scriptText,
     retryKey,
     resolvedDeps,
+    target,
+    setAiDescription,
   ])
 
-  const retry = useCallback(() => setRetryKey((key) => key + 1), [])
+  const retry = useCallback(() => { editedRef.current = false; setRetryKey((key) => key + 1) }, [])
 
-  return { aiDescription, isParsing, parseError, retry, setAiDescription }
+  return { aiDescription, isParsing, parseError, retry, setAiDescription: changeDescription }
 }

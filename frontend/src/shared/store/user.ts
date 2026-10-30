@@ -18,6 +18,7 @@ interface UserState {
   userId: number | null
 }
 const storedSession = () => {
+  if (typeof localStorage === 'undefined') return { token: '', userId: null }
   const token = localStorage.getItem('token') || ''
   return { token, userId: token ? Number(localStorage.getItem('user_id')) || null : null }
 }

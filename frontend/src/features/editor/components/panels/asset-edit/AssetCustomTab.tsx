@@ -10,6 +10,8 @@ import { modelOptionLabel } from '@/shared/components/ModelProviderIcon'
 import type { ModelVO } from '@/shared/types/api'
 
 import { uploadReferenceImage } from '../generation-helpers'
+import { mediaUnavailableMessage } from '../panel-target'
+import { usePanelTarget } from '../usePanelTarget'
 import { defaultNotifier } from './notifier'
 import type { EditableAssetType } from './types'
 import { assetTypeLabel } from './useAssetDescriptionParser'
@@ -53,6 +55,8 @@ export function AssetCustomTab({
   projectId,
   referenceImageUrl,
 }: AssetCustomTabProps) {
+  const target = usePanelTarget(`reference-${assetType}`, projectId ?? 'none')
+  const unavailableMessage = mediaUnavailableMessage(modelsLoading, models)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isUploadingReference, setIsUploadingReference] = useState(false)
 
@@ -68,7 +72,7 @@ export function AssetCustomTab({
     models.length > 0 &&
     (assetType === 'prop' || Boolean(aiDescription.trim())) &&
     Boolean(projectId) &&
-    Boolean(modelCode)
+    models.some((model) => model.code === modelCode)
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -77,12 +81,14 @@ export function AssetCustomTab({
     setIsUploadingReference(true)
     try {
       const url = await uploadReferenceImage(file)
+      if (!target.current()) return
       onReferenceImageChange(url, file)
       defaultNotifier.success('参考图上传成功')
     } catch (error) {
+      if (!target.current()) return
       defaultNotifier.error(error instanceof Error ? error.message : '参考图上传失败')
     } finally {
-      setIsUploadingReference(false)
+      if (target.current()) setIsUploadingReference(false)
     }
   }
 
@@ -95,6 +101,7 @@ export function AssetCustomTab({
 
   return (
     <div className="mb-6 space-y-3">
+      {unavailableMessage ? <p className="text-sm text-slate-500" role="status">{unavailableMessage}</p> : null}
       <div className="flex gap-3">
         <div className="shrink-0">
           <input

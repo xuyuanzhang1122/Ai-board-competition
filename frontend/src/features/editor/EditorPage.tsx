@@ -6,7 +6,6 @@ import { Link, useParams } from 'react-router-dom'
 import { notify } from '@/shared/feedback/feedback'
 import type { ExportRequest } from '@/shared/types/api'
 
-import { AssetGenerateModal } from './components/dialogs/AssetGenerateModal'
 import { AssetVersionModal } from './components/dialogs/AssetVersionModal'
 import { ModelConfigModal } from './components/dialogs/ModelConfigModal'
 import {
@@ -21,7 +20,6 @@ import { ExportProgressModal } from './components/export/ExportProgressModal'
 import { ProjectNameEditor } from './components/ProjectNameEditor'
 import { RightPanelManager } from './components/RightPanelManager'
 import type {
-  AssetGenerateDialogRequest,
   AssetVersionDialogRequest,
 } from './components/storyboard/StoryboardRow'
 import { StoryboardTable } from './components/storyboard/StoryboardTable'
@@ -55,9 +53,6 @@ export function EditorPage() {
 
   const [pageStatus, setPageStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [generationRequest, setGenerationRequest] = useState<AssetGenerateDialogRequest | null>(
-    null,
-  )
   const [versionRequest, setVersionRequest] = useState<AssetVersionDialogRequest | null>(null)
   const [modelConfigOpen, setModelConfigOpen] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
@@ -67,7 +62,6 @@ export function EditorPage() {
 
   const assetDialogs = useMemo(
     () => ({
-      openGeneration: setGenerationRequest,
       openVersions: setVersionRequest,
     }),
     [],
@@ -259,12 +253,6 @@ export function EditorPage() {
         </aside>
       </div>
 
-      {generationRequest ? (
-        <AssetGenerateModal
-          request={generationRequest}
-          onClose={() => setGenerationRequest(null)}
-        />
-      ) : null}
       {versionRequest ? (
         <AssetVersionModal request={versionRequest} onClose={() => setVersionRequest(null)} />
       ) : null}

@@ -52,6 +52,7 @@ export interface OpenPanel {
 export interface PanelManagerStore {
   closePanel: () => void
   currentPanelType: PanelType
+  defaultPanelData: DefaultPanelData
   openPanel: OpenPanel
   panelData: PanelData
   panelKey: number
@@ -65,16 +66,18 @@ export const createPanelManagerStore = (): PanelManagerStoreHook =>
     const openPanel = ((type: PanelType, data?: PanelData) => {
       set((state) => ({
         currentPanelType: type,
-        panelData: data ?? {},
+        panelData: type === 'default' ? data ?? state.defaultPanelData : data ?? {},
+        defaultPanelData: type === 'default' ? (data as DefaultPanelData | undefined) ?? state.defaultPanelData : state.defaultPanelData,
         panelKey: state.currentPanelType === type ? state.panelKey + 1 : state.panelKey,
       }))
     }) as OpenPanel
 
     return {
+      defaultPanelData: {},
       closePanel() {
         set((state) => ({
           currentPanelType: 'default',
-          panelData: {},
+          panelData: state.defaultPanelData,
           panelKey: state.panelKey + 1,
         }))
       },
@@ -83,7 +86,8 @@ export const createPanelManagerStore = (): PanelManagerStoreHook =>
       panelData: {},
       panelKey: 0,
       updatePanelData(data) {
-        set({ panelData: { ...get().panelData, ...data } as PanelData })
+        const panelData = { ...get().panelData, ...data } as PanelData
+        set({ panelData, ...(get().currentPanelType === 'default' ? { defaultPanelData: panelData as DefaultPanelData } : {}) })
       },
     }
   })

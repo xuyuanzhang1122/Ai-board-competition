@@ -9,6 +9,8 @@ import type {
 
 import { characterApi, propApi, sceneApi } from '../../../api'
 import { useEditorStore } from '../../../store'
+import { guardTargetDependencies } from '../panel-target'
+import { usePanelTarget } from '../usePanelTarget'
 import { defaultNotifier, type Notifier } from './notifier'
 import type { EditableAssetType } from './types'
 
@@ -248,12 +250,11 @@ export function useAssetThumbnailMutation(
 ): UseAssetThumbnailMutationReturn {
   const [isUpdatingThumbnail, setIsUpdatingThumbnail] = useState(false)
 
+  const target = usePanelTarget('thumbnail', input.assetId ?? 'new')
+
   const resolvedDeps = useMemo<ThumbnailMutationDeps>(
-    () => ({
-      ...createDefaultDeps(),
-      ...deps,
-    }),
-    [deps],
+    () => guardTargetDependencies({ ...createDefaultDeps(), ...deps }, target.current),
+    [deps, target],
   )
 
   const selectImage = useCallback(
@@ -265,7 +266,7 @@ export function useAssetThumbnailMutation(
         setIsUpdatingThumbnail(false)
       }
     },
-    [input, resolvedDeps],
+    [input, resolvedDeps, target],
   )
 
   const deleteGeneratedImage = useCallback(() => {

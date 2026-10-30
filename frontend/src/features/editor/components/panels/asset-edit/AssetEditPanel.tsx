@@ -23,6 +23,7 @@ import { useModelConfigStore } from '../../../model-config-store'
 import type { AssetEditPanelData } from '../../../panel-manager-store'
 import { useEditorStore } from '../../../store'
 import { useAvailableModels } from '../../../useAvailableModels'
+import { usePanelDraft, usePanelTarget } from '../usePanelTarget'
 import { AssetCustomTab } from './AssetCustomTab'
 import { AssetLocalTab } from './AssetLocalTab'
 import type { AssetEditTab, CombinedHistoryItem, EditableAssetType } from './types'
@@ -85,9 +86,10 @@ export function AssetEditPanel({
   const FallbackIcon = ASSET_ICONS[assetType]
   const typeLabel = assetTypeLabel(assetType)
 
-  const [activeTab, setActiveTab] = useState<AssetEditTab>('custom')
+  const target = usePanelTarget(`asset-${assetType}`, assetId ?? `new:${assetName}`)
+  const [activeTab, setActiveTab] = usePanelDraft<AssetEditTab>(target.key, 'tab', 'custom')
   const [previewImage, setPreviewImage] = useState<PreviewImage | null>(null)
-  const [referenceImageUrl, setReferenceImageUrl] = useState<string | null>(null)
+  const [referenceImageUrl, setReferenceImageUrl] = usePanelDraft<string | null>(target.key, 'reference', null)
   const [refreshKey, setRefreshKey] = useState(0)
 
   const configuredCharacterModel = useModelConfigStore((state) => state.characterImageModel)
@@ -98,8 +100,8 @@ export function AssetEditPanel({
       ? configuredCharacterModel
       : configuredSceneModel || DEFAULT_MODELS[assetType]
   const { loading: modelsLoading, models: imageModels } = useAvailableModels('IMAGE')
-  const [modelCode, setModelCode] = useState(configuredImageModel)
-  const [aspectRatio, setAspectRatio] = useState(() => {
+  const [modelCode, setModelCode] = usePanelDraft(target.key, 'model', configuredImageModel)
+  const [aspectRatio, setAspectRatio] = usePanelDraft(target.key, 'aspectRatio', () => {
     const ratios = getModelAspectRatios('IMAGE', configuredImageModel)
     return ratios[0] || getDefaultAspectRatio('IMAGE')
   })
@@ -111,14 +113,10 @@ export function AssetEditPanel({
     languageModel,
     prefillDescription,
     projectId,
+    draftKey: target.key,
     scriptText: scriptText || '',
   })
 
-  /* eslint-disable @eslint-react/hooks-extra/no-direct-set-state-in-use-effect */
-  useEffect(() => {
-    setActiveTab('custom')
-    setReferenceImageUrl(null)
-  }, [assetId, assetType])
 
   useEffect(() => {
     if (imageModels.length === 0) return
@@ -128,8 +126,8 @@ export function AssetEditPanel({
     if (nextModel !== modelCode) setModelCode(nextModel)
     const ratios = getModelAspectRatios('IMAGE', nextModel)
     if (!ratios.includes(aspectRatio) && ratios[0]) setAspectRatio(ratios[0])
-  }, [aspectRatio, configuredImageModel, imageModels, modelCode])
-  /* eslint-enable @eslint-react/hooks-extra/no-direct-set-state-in-use-effect */
+  }, [aspectRatio, configuredImageModel, imageModels, modelCode, setAspectRatio, setModelCode])
+
 
   const handleCreatedAssetId = useCallback(() => {
     // 通过 onCreatedAssetId 让父层/同层刷新 sameNameAssetIds 等数据
