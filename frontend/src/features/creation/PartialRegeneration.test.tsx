@@ -18,3 +18,11 @@ describe('locked form', () => {
     expect(html).toMatch(/^<fieldset[^>]*disabled=""/)
   })
 })
+
+it('allows unlocking a saved stale board even when generation is unavailable', () => {
+  const html = renderToStaticMarkup(<PartialRegeneration disabled board={board} lockDisabled={false} lockedShotIds={['b']} onGenerate={() => {}} onLock={() => {}} />)
+  expect(html).not.toMatch(/^<fieldset[^>]*disabled=""/)
+  expect(html).toMatch(/aria-label="锁定镜头 2"[^>]*checked=""/)
+  expect(html).not.toMatch(/aria-label="锁定镜头 2"[^>]*disabled=""/)
+  expect(html).toMatch(/aria-label="选择重生成镜头 1"[^>]*disabled=""/)
+})

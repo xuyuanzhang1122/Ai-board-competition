@@ -321,6 +321,7 @@ function CreationSession({
                   {draft && body.storyboard && <PartialRegeneration
                     board={body.storyboard}
                     disabled={!saved || !body.scriptConfirmed || boardStale || running || !model}
+                    lockDisabled={!saved || loading || running}
                     lockedShotIds={draft.lockedShotIds ?? []}
                     onGenerate={(shotIds, instruction) => void workspace.send({ kind: 'partial', draftId: draft.id, payload: { requestId: requestId(), revision: draft.revision, model, shotIds, lockedShotIds: draft.lockedShotIds ?? [], instruction } })}
                     onLock={(lockedShotIds) => void workspace.send({ kind: 'shot-locks', draftId: draft.id, payload: { revision: draft.revision, lockedShotIds } })}
