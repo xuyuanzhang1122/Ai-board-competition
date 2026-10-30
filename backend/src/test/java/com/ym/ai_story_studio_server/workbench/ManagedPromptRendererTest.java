@@ -39,4 +39,14 @@ class ManagedPromptRendererTest {
         assertThatThrownBy(()->renderer.render("SHOT_IMAGE",Map.of(),"IMAGE")).hasMessageContaining("变量");
         assertThatThrownBy(()->renderer.render("SHOT_IMAGE",Map.of("scriptText","x"),"TEXT")).hasMessageContaining("能力");
     }
+    @Test void publishedSubsetUsesFullCallerContextWithoutBreakingNewRequests() {
+        db.update("INSERT INTO workbench_prompt_stages VALUES('ASSET_SCENE_DESCRIPTION',0,1)");
+        var next=library.createPrompt(new PromptCreate("ASSET_SCENE_DESCRIPTION","描述：{{sourceText}}","sourceText","TEXT","subset"));
+        library.changePromptStatus(next.stage(),next.version(),new PromptStatus("PUBLISHED",0));
+        var result=renderer.render(next.stage(),Map.of("assetName","海岸","sourceText","灯塔"),"TEXT");
+        assertThat(result.rendered()).isEqualTo("描述：灯塔");
+        assertThat(result.variables()).containsEntry("assetName","海岸");
+        assertThatThrownBy(()->renderer.render(next.stage(),Map.of("assetName","海岸"),"TEXT")).hasMessageContaining("变量");
+    }
+
 }

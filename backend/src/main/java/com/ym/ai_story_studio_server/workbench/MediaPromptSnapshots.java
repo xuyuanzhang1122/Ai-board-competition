@@ -73,6 +73,11 @@ public class MediaPromptSnapshots {
         String style=stage.equals("SHOT_VIDEO")?db.queryForObject("SELECT style_code FROM projects WHERE id=?",String.class,projectId):null;
         return render(stage,variables,style,parameters,references,userPrompt);
     }
+    public Reference selectedReference(Long projectId,String kind,Long id,String url,String label) {
+        if(!Set.of("character","prop").contains(kind))throw new IllegalArgumentException("不支持的参考素材类型");
+        var selected=asset(projectId,id,kind);
+        return new Reference(validReference(url)?url:value(selected.get("url")),label);
+    }
     private Map<String,Object> asset(Long projectId,Long id,String kind) {
         var row=db.queryForMap("SELECT COALESCE(p.display_name,l.name,'') AS asset_name,COALESCE(p.override_description,l.description,'') AS description,p.thumbnail_url AS project_url,l.thumbnail_url AS library_url FROM project_"+kind+"s p LEFT JOIN "+kind+"_library l ON l.id=p.library_"+kind+"_id AND l.deleted_at IS NULL WHERE p.id=? AND p.project_id=?",id,projectId);
         String url=value(row.get("project_url"));

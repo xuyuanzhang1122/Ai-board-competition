@@ -690,8 +690,8 @@ public class BatchGenerationService {
 
         // 4. 创建Job任务
         var references = new java.util.ArrayList<MediaPromptSnapshots.Reference>();
-        if (request.characters() != null) for (var asset : request.characters()) references.add(new MediaPromptSnapshots.Reference(asset.thumbnailUrl(), asset.name()));
-        if (request.props() != null) for (var asset : request.props()) references.add(new MediaPromptSnapshots.Reference(asset.thumbnailUrl(), asset.name()));
+        if (request.characters() != null) for (var asset : request.characters()) references.add(mediaPrompts.selectedReference(projectId, "character", asset.id(), asset.thumbnailUrl(), asset.name()));
+        if (request.props() != null) for (var asset : request.props()) references.add(mediaPrompts.selectedReference(projectId, "prop", asset.id(), asset.thumbnailUrl(), asset.name()));
         references.add(new MediaPromptSnapshots.Reference(sceneImageUrl, request.scene().name()));
         if (request.referenceImageUrl() != null) references.add(new MediaPromptSnapshots.Reference(request.referenceImageUrl(), "分镜图"));
         var promptSnapshots = prepareMedia(projectId, java.util.List.of(shotId), "SHOT_VIDEO", request.model(), request.aspectRatio(), request.duration(), request.size(), request.prompt(), references, 1, "ALL");

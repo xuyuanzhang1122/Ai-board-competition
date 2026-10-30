@@ -196,4 +196,22 @@ class BatchGenerationServiceTest {
         prop.setProjectId(7L);
         return prop;
     }
+    @Test void singleVideoFreezesResolvedSelectedReferences() {
+        var shot=new com.ym.ai_story_studio_server.entity.StoryboardShot();shot.setId(10L);shot.setProjectId(7L);
+        when(storyboardShotMapper.selectById(10L)).thenReturn(shot);
+        when(mediaPrompts.selectedReference(7L,"character",11L,"https://via.placeholder.com/person","角色")).thenReturn(new com.ym.ai_story_studio_server.workbench.MediaPromptSnapshots.Reference("https://example.org/person.png","角色"));
+        when(mediaPrompts.selectedReference(7L,"prop",12L,null,"道具")).thenReturn(new com.ym.ai_story_studio_server.workbench.MediaPromptSnapshots.Reference("https://example.org/prop.png","道具"));
+        when(mediaPrompts.forTarget(any(),any(),any(),any(),any(),any())).thenReturn(new com.ym.ai_story_studio_server.workbench.MediaPromptSnapshots.Snapshot(1,"prompt",List.of(),java.util.Map.of("model","stub"),List.of(),null));
+        var refs=ArgumentCaptor.forClass(java.util.List.class);
+        var resource=new com.ym.ai_story_studio_server.dto.ai.ShotVideoGenerateRequest.AssetResource(21L,"海岸","https://example.org/scene.png");
+        service.generateSingleShotVideo(7L,10L,new com.ym.ai_story_studio_server.dto.ai.ShotVideoGenerateRequest("海边", "16:9",5,"854x480",null,"stub",resource,
+            List.of(new com.ym.ai_story_studio_server.dto.ai.ShotVideoGenerateRequest.AssetResource(11L,"角色","https://via.placeholder.com/person")),
+            List.of(new com.ym.ai_story_studio_server.dto.ai.ShotVideoGenerateRequest.AssetResource(12L,"道具",null))));
+        verify(mediaPrompts).forTarget(org.mockito.ArgumentMatchers.eq(7L),org.mockito.ArgumentMatchers.eq(10L),org.mockito.ArgumentMatchers.eq("SHOT_VIDEO"),any(),org.mockito.ArgumentMatchers.eq("海边"),refs.capture());
+        assertThat(refs.getValue()).containsExactly(
+            new com.ym.ai_story_studio_server.workbench.MediaPromptSnapshots.Reference("https://example.org/person.png","角色"),
+            new com.ym.ai_story_studio_server.workbench.MediaPromptSnapshots.Reference("https://example.org/prop.png","道具"),
+            new com.ym.ai_story_studio_server.workbench.MediaPromptSnapshots.Reference("https://example.org/scene.png","海岸"));
+    }
+
 }

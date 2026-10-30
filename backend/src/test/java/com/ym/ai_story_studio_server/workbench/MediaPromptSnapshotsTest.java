@@ -50,6 +50,16 @@ class MediaPromptSnapshotsTest {
         assertThat(image.prompt()).contains("覆盖角色","覆盖描述").doesNotContain("旧描述");
         var video=media.forTarget(1L,10L,"SHOT_VIDEO",Map.of("model","stub","aspectRatio","16:9","duration",5),null,null);
         assertThat(video.referenceUrls()).containsExactly("https://example.org/person.png","https://example.org/prop.png","https://example.org/scene.png","https://example.org/shot.png");
+        db.update("INSERT INTO prop_library VALUES(40,'纸伞','道具','https://example.org/library-prop.png',NULL)");
+        db.update("UPDATE project_props SET thumbnail_url=NULL,library_prop_id=40 WHERE id=41");
+        var selected=List.of(
+            media.selectedReference(1L,"character",21L,"https://via.placeholder.com/person","选择角色"),
+            media.selectedReference(1L,"prop",41L,null,"选择道具"),
+            new MediaPromptSnapshots.Reference("https://example.org/scene.png","场景"));
+        var single=media.forTarget(1L,10L,"SHOT_VIDEO",Map.of("model","stub"),null,selected);
+        assertThat(single.referenceUrls()).containsExactly("https://example.org/person.png","https://example.org/library-prop.png","https://example.org/scene.png","https://example.org/shot.png");
+        assertThat(single.prompt()).contains("选择角色","选择道具");
+        assertThatThrownBy(()->media.selectedReference(2L,"character",21L,null,"跨项目")).isInstanceOf(org.springframework.dao.EmptyResultDataAccessException.class);
         media.save(1L,10L,video);
         db.update("UPDATE storyboard_shots SET script_text='后改分镜' WHERE id=10");
         db.update("UPDATE project_scenes SET thumbnail_url='https://example.org/new.png' WHERE id=31");

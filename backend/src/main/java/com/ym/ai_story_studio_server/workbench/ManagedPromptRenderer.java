@@ -20,7 +20,7 @@ public class ManagedPromptRenderer {
         if (!capability.equals(p.capability())) throw new BusinessException(ResultCode.CONFIG_ERROR,"提示词能力不匹配："+stage);
         var declared=new HashSet<String>();
         for(String v:p.variables().split(","))if(!v.isBlank())declared.add(v.trim());
-        if(!declared.equals(variables.keySet())) throw new BusinessException(ResultCode.PARAM_INVALID,"提示词变量不匹配："+stage);
+        if(!variables.keySet().containsAll(declared)) throw new BusinessException(ResultCode.PARAM_INVALID,"提示词变量不匹配："+stage);
         var matcher=Pattern.compile("\\{\\{([A-Za-z][A-Za-z0-9_]*)\\}\\}").matcher(p.content());
         var output=new StringBuffer();
         while(matcher.find()) {
