@@ -71,7 +71,7 @@ import java.util.Map;
  * // 图生图
  * ImageGenerateRequest request = new ImageGenerateRequest(
  *     "将图片风格改为水彩画",
- *     "doubao-seedream-4-5-251128",
+ *     "verified-image-model-id",
  *     "1:1",
  *     "https://example.com/reference.jpg"  // 参考图
  * );

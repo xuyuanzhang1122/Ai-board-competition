@@ -81,7 +81,7 @@ import java.util.stream.Collectors;
  *     "ALL",                       // 全部生成
  *     1,                           // 每个生成1张
  *     "21:9",                      // 画幅比例
- *     "doubao-seedream-4-5-251128" // 模型
+ *     "verified-image-model-id"    // 模型
  * );
  *
  * BatchGenerateResponse response = batchGenerationService.generateShotsBatch(projectId, request);

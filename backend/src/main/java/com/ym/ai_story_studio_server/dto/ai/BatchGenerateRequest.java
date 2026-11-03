@@ -35,7 +35,7 @@ import java.util.List;
  *     "ALL",                       // 全部生成
  *     1,                           // 每个分镜生成1张图
  *     "21:9",                      // 画幅比例
- *     "doubao-seedream-4-5-251128" // 使用 Seedream 模型
+ *     "verified-image-model-id"    // 官方目录中已启用的图片模型
  * );
  *
  * // 批量生成视频(仅缺失,每个生成1个)

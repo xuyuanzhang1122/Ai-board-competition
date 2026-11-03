@@ -22,7 +22,7 @@ RULES = {
     "legacy_model": re.compile(
         r"gemini[-_]|gpt[-_](?:image|4o)|grok[-_]|"
         r"seedance[-_]2[.-]0|doubao-seedance-1[-_]5|"
-        r"\bsd-(?:api-)?2-|doubao-seedream-5", re.I
+        r"\bsd-(?:api-)?2-|doubao-seedream[-_]", re.I
     ),
 }
 SUFFIXES = {".java", ".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs", ".json", ".sql",
