@@ -44,7 +44,7 @@ import java.util.List;
  *     "MISSING",                   // 仅缺失生成
  *     1,                           // 每个分镜生成1个视频
  *     "16:9",                      // 视频画幅
- *     "sd-api-2-fast-720p" // 使用 Seedance 2.0 视频模型
+ *     "verified-video-model-id" // 仅为占位 ID；须选择已验证并启用的视频模型
  * );
  * </pre>
  *

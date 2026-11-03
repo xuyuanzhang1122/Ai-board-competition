@@ -59,7 +59,7 @@ import java.util.Map;
  * // 文生图
  * ImageGenerateRequest request = new ImageGenerateRequest(
  *     "一个科幻风格的未来城市，赛博朋克，霓虹灯",
- *     "gemini-3-pro-image-preview",  // 可选,默认从配置读取
+ *     "verified-image-model-id",  // 必须由官方目录确认并启用
  *     "16:9",                         // 可选,默认16:9
  *     null                            // 参考图URL(可选)
  * );

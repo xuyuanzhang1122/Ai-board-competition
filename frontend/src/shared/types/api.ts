@@ -480,7 +480,7 @@ export interface ToolboxGenerateRequest {
   aspectRatio?: string
   duration?: number
   referenceImageUrl?: string
-  /** 生成张数(1-4)，仅部分图片模型(如gpt-image-2-4k)支持 */
+  /** 生成张数(1-4)，仅已验证支持多图的模型可用 */
   count?: number
   /** 图片质量档位: auto/low/standard/high，仅部分图片模型支持 */
   quality?: string

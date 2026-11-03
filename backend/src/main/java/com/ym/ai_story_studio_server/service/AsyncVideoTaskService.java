@@ -349,7 +349,7 @@ public class AsyncVideoTaskService {
     /**
      * 将API状态映射为进度百分比
      *
-     * <p>上游未返回 progress 时，根据 GeekNow status 字段映射进度。
+     * <p>上游未返回 progress 时，根据供应商 status 字段映射进度。
      *
      * @param status API返回的任务状态(queued/processing/completed/error)
      * @return 进度百分比(0-100)

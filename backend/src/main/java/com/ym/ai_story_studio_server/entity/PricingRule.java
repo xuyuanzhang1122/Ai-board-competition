@@ -24,7 +24,7 @@ public class PricingRule {
     private String bizType;
 
     /**
-     * 模型标识：gpt-image-2/seedance/gemini等
+     * 模型标识：verified-image-model-id/seedance/gemini等
      */
     private String modelCode;
 

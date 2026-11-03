@@ -142,7 +142,7 @@ public class GenerateController {
      *
      * {
      *   "prompt": "一个赛博朋克风格的未来城市,霓虹灯,夜景",
-     *   "model": "gemini-3-pro-image-preview",
+     *   "model": "verified-image-model-id",
      *   "aspectRatio": "16:9",
      *   "referenceImageUrl": null,
      *   "projectId": 1
@@ -157,7 +157,7 @@ public class GenerateController {
      *   "data": {
      *     "imageUrl": "https://oss.example.com/images/ai_image_123.jpg",
      *     "jobId": 123,
-     *     "model": "gemini-3-pro-image-preview",
+     *     "model": "verified-image-model-id",
      *     "aspectRatio": "16:9",
      *     "costPoints": 50
      *   },
@@ -168,7 +168,7 @@ public class GenerateController {
      * <p><strong>参数说明:</strong>
      * <ul>
      *   <li>prompt - 提示词,必填,1-2000字符</li>
-     *   <li>model - 模型名称,可选,以 GeekNow 图片模型白名单为准</li>
+     *   <li>model - 模型名称,可选,必须由官方模型目录确认并启用；未启用时拒绝受理</li>
      *   <li>aspectRatio - 画幅比例,可选,支持1:1/16:9/9:16/21:9,默认16:9</li>
      *   <li>referenceImageUrl - 参考图URL,可选,用于图生图</li>
      *   <li>projectId - 项目ID,必填</li>
@@ -231,7 +231,7 @@ public class GenerateController {
      *   "data": {
      *     "jobId": 456,
      *     "status": "PENDING",
-     *     "model": "sd-api-2-fast-720p",
+     *     "model": "verified-video-model-id",
      *     "aspectRatio": "16:9",
      *     "duration": 5,
      *     "costPoints": null  // 积分将在生成成功后扣除
@@ -244,7 +244,7 @@ public class GenerateController {
      * <ul>
      *   <li>prompt - 提示词,必填,1-1000字符</li>
      *   <li>aspectRatio - 画幅比例,可选,支持16:9/9:16/1:1,默认16:9</li>
-     *   <li>duration - 视频时长(秒),可选,具体范围由 GeekNow 模型决定,默认8秒</li>
+     *   <li>duration - 视频时长(秒),可选,具体范围由已验证模型能力决定</li>
      *   <li>referenceImageUrl - 首帧参考图URL,可选,用于图生视频</li>
      *   <li>projectId - 项目ID,必填</li>
      * </ul>
@@ -361,7 +361,7 @@ public class GenerateController {
      *   "mode": "ALL",
      *   "countPerItem": 1,
      *   "aspectRatio": "21:9",
-     *   "model": "gpt-image-2"
+     *   "model": "verified-image-model-id"
      * }
      * </pre>
      *
@@ -413,7 +413,7 @@ public class GenerateController {
      *   "mode": "MISSING",
      *   "countPerItem": 1,
      *   "aspectRatio": "16:9",
-     *   "model": "sd-api-2-fast-720p"
+     *   "model": "verified-video-model-id"
      * }
      * </pre>
      *

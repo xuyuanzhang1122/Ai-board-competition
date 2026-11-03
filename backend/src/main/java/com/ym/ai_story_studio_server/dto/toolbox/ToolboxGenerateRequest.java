@@ -34,7 +34,7 @@ import java.util.List;
  * ToolboxGenerateRequest request = new ToolboxGenerateRequest(
  *     "IMAGE",
  *     "赛博朋克风格的城市",
- *     "gemini-3-pro-image-preview",
+ *     "verified-image-model-id",
  *     "16:9",
  *     null,
  *     null
@@ -95,11 +95,11 @@ public record ToolboxGenerateRequest(
         /**
          * 模型名称
          *
-         * <p>可选,不指定时使用配置的默认模型:
+         * <p>必须从已验证且启用的官方目录选择；以下媒体 ID 示例仅为协议占位，不代表已接通:
          * <ul>
-         *   <li>TEXT: gemini-3.5-flash</li>
-         *   <li>IMAGE: GeekNow 图片模型白名单</li>
-         *   <li>VIDEO: sudashuiapi Seedance 2.0 视频模型白名单</li>
+         *   <li>TEXT: deepseek-flash</li>
+         *   <li>IMAGE: 官方目录中已验证并启用的图片模型（当前未开放）</li>
+         *   <li>VIDEO: 官方目录中已验证并启用的视频模型（当前未开放）</li>
          * </ul>
          */
         @Size(max = 100, message = "模型编码不能超过100个字符")
@@ -149,7 +149,7 @@ public record ToolboxGenerateRequest(
         /**
          * 生成张数
          *
-         * <p>可选,仅在IMAGE时对支持多图的模型(如gpt-image-2-4k)生效,范围1-4,默认1
+         * <p>可选,仅在IMAGE时对已验证支持多图的模型生效,范围1-4,默认1
          */
         @Min(value = 1, message = "生成张数不能小于1")
         @Max(value = 4, message = "生成张数不能超过4")
