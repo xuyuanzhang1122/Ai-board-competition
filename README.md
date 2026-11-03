@@ -42,11 +42,13 @@ docker compose --env-file infra/competition/.env.local -f infra/competition/comp
 
 账号由管理员创建，无自助注册入口。启动与验收步骤见 [本机简单验收](docs/competition/本机简单验收.md)，当前能力范围以较新的专项验收记录为准。
 
+云环境部署与本轮续作结果见 [云环境部署验收记录](docs/competition/云环境部署验收记录.md)。
+
 ## 工程与检查
 
 | 目录 | 用途 |
 | --- | --- |
-| `backend/` | Java 17、Spring Boot、MyBatis-Plus，Flyway V1–V39 |
+| `backend/` | Java 17、Spring Boot、MyBatis-Plus，Flyway V1–V46 |
 | `frontend/` | React 19、TypeScript、Vite 用户端 |
 | `frontend-admin/` | 独立管理端 |
 | `infra/competition/` | 参赛隔离基础设施 |
