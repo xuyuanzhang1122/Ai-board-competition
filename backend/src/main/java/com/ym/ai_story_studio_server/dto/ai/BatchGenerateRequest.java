@@ -35,7 +35,7 @@ import java.util.List;
  *     "ALL",                       // 全部生成
  *     1,                           // 每个分镜生成1张图
  *     "21:9",                      // 画幅比例
- *     "doubao-seedream-4-5-251128" // 使用 Seedream 模型
+ *     "verified-image-model-id"    // 官方目录中已启用的图片模型
  * );
  *
  * // 批量生成视频(仅缺失,每个生成1个)
@@ -44,7 +44,7 @@ import java.util.List;
  *     "MISSING",                   // 仅缺失生成
  *     1,                           // 每个分镜生成1个视频
  *     "16:9",                      // 视频画幅
- *     "sd-api-2-fast-720p" // 使用 Seedance 2.0 视频模型
+ *     "verified-video-model-id" // 仅为占位 ID；须选择已验证并启用的视频模型
  * );
  * </pre>
  *

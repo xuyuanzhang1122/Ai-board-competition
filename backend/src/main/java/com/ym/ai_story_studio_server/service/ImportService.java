@@ -32,7 +32,7 @@ public interface ImportService {
     /**
      * 为已导入项目补充上传角色/场景/道具图片。
      *
-     * <p>图片文件按名称匹配项目内资源，支持类似 {@code 001_黎呦呦_gpt-image-2.png}
+     * <p>图片文件按名称匹配项目内资源，支持类似 {@code 001_黎呦呦_verified-image-model-id.png}
      * 的导出文件名。
      *
      * @param userId     当前用户 ID

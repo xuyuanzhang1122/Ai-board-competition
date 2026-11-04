@@ -224,12 +224,13 @@
 | 数据交换 | `ImportService`、`ExportService` | Excel/图片导入和 ZIP 导出 |
 | 工具箱 | `ToolboxService` | 会话与独立 AI 任务 |
 
-### Client 与 MQ
+### Provider 与 MQ
 
-- `ImageGenerationRouter`：按模型/Provider 把图片请求路由到 Geeknow 或 Sub2API。
-- `GeeknowClient`：文本/图片等 Geeknow HTTP 适配。
-- `Sub2ApiImageClient`：OpenAI Images 兼容图片接口。
-- `SudashuiVideoClient`：Seedance 视频提交与查询。
+历史客户端 `ImageGenerationRouter`、`GeeknowClient`、`Sub2ApiImageClient`、`SudashuiVideoClient` 已随旧上游退出删除，不得恢复或作为接入参考（见 `docs/competition/M1旧媒体上游退出记录.md`）。
+
+- `provider/OfficialTextProvider`、`OfficialModelCatalog*`、`TextModel*`：官方文字调用、模型目录同步与准入。
+- `provider/UnavailableMediaProvider`：同时实现图片与视频 Provider 接口，在官方媒体适配接入前一律拒绝受理。
+- `ImageGenerationProvider`、`VideoGenerationProvider`：媒体 Provider 接口，新官方适配器应实现它们。
 - `MQConstant`：交换机、队列、routing key、TTL。
 - `MQInitConfig`：声明业务、重试、延迟和死信拓扑。
 - `MQProducer`：发布并等待 confirm。

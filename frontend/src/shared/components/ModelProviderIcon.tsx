@@ -1,4 +1,4 @@
-import { AiStudio, DeepSeek, Doubao, Gemini, Grok, OpenAI } from '@lobehub/icons'
+import { DeepSeek, Doubao, Gemini, Grok, OpenAI } from '@lobehub/icons'
 import { Shapes } from 'lucide-react'
 
 interface ModelProviderIconProps {
@@ -16,7 +16,6 @@ export function ModelProviderIcon({ code = '', provider = '', size = 16 }: Model
     return <Doubao.Color size={size} />
   }
   if (identity.includes('grok') || identity.includes('xai')) return <Grok size={size} />
-  if (identity.includes('agnes') || identity.includes('geeknow')) return <AiStudio size={size} />
   return <Shapes aria-hidden className="text-muted-foreground" style={{ height: size, width: size }} />
 }
 

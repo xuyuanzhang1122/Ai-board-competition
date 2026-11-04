@@ -81,7 +81,7 @@ import java.util.stream.Collectors;
  *     "ALL",                       // 全部生成
  *     1,                           // 每个生成1张
  *     "21:9",                      // 画幅比例
- *     "doubao-seedream-4-5-251128" // 模型
+ *     "verified-image-model-id"    // 模型
  * );
  *
  * BatchGenerateResponse response = batchGenerationService.generateShotsBatch(projectId, request);
@@ -145,7 +145,7 @@ public class BatchGenerationService {
      *   <li>mode - ALL(全部生成)或MISSING(仅缺失),必填</li>
      *   <li>countPerItem - 每个分镜生成几张图,可选,默认1</li>
      *   <li>aspectRatio - 画幅比例,可选,默认16:9</li>
-     *   <li>model - 模型名称,可选,默认gemini-3-pro-image-preview</li>
+     *   <li>model - 模型名称,必须显式选择已验证且启用的图片模型</li>
      * </ul>
      *
      * @param projectId 项目ID
@@ -220,7 +220,7 @@ public class BatchGenerationService {
      *   <li>mode - ALL(全部生成)或MISSING(仅缺失),必填</li>
      *   <li>countPerItem - 每个分镜生成几个视频,可选,默认1</li>
      *   <li>aspectRatio - 视频画幅比例,可选,默认16:9</li>
-     *   <li>model - 模型名称,可选,默认使用配置中的 GeekNow 视频模型</li>
+     *   <li>model - 模型名称,必须显式选择已验证且启用的视频模型</li>
      * </ul>
      *
      * @param projectId 项目ID
@@ -292,7 +292,7 @@ public class BatchGenerationService {
      *   <li>mode - ALL(全部生成)或MISSING(仅缺失),必填</li>
      *   <li>countPerItem - 每个角色生成几张图,可选,默认1</li>
      *   <li>aspectRatio - 画幅比例,可选,默认16:9</li>
-     *   <li>model - 模型名称,可选,默认gemini-3-pro-image-preview</li>
+     *   <li>model - 模型名称,必须显式选择已验证且启用的图片模型</li>
      * </ul>
      *
      * @param projectId 项目ID
@@ -359,7 +359,7 @@ public class BatchGenerationService {
      *   <li>mode - ALL(全部生成)或MISSING(仅缺失),必填</li>
      *   <li>countPerItem - 每个场景生成几张图,可选,默认1</li>
      *   <li>aspectRatio - 画幅比例,可选,默认16:9</li>
-     *   <li>model - 模型名称,可选,默认gemini-3-pro-image-preview</li>
+     *   <li>model - 模型名称,必须显式选择已验证且启用的图片模型</li>
      * </ul>
      *
      * @param projectId 项目ID

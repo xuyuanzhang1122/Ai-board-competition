@@ -87,6 +87,12 @@ class UpstreamAuditTest(unittest.TestCase):
         self.assertEqual(result.returncode, 1, result.stderr)
         self.assertEqual(json.loads(result.stdout)["counts"]["runtime"], 3)
 
+    def test_any_legacy_doubao_seedream_version_is_detected(self):
+        self.write("backend/src/main/java/Example.java", "doubao-seedream-4-5-251128\n")
+        result = self.run_audit("--check")
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["counts"]["runtime"], 1)
+
     def test_does_not_follow_tracked_symlinks(self):
         outside = self.root / "private.txt"
         outside.write_text("Geeknow PRIVATE_CONTENT")

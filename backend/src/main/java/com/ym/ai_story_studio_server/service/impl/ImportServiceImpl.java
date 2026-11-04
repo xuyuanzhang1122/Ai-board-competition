@@ -52,6 +52,8 @@ public class ImportServiceImpl implements ImportService {
     private static final String BIND_PSCENE = "PSCENE";
     private static final String BIND_PPROP = "PPROP";
     private static final Pattern NUMBERED_ASSET_FILE = Pattern.compile("^\\d{1,4}[_-]+(.+)$");
+    /** Generated asset files may carry "_<model-id>[_...]"; keep only the resource name before it. */
+    private static final Pattern MODEL_ID_SUFFIX = Pattern.compile("_[A-Za-z][A-Za-z0-9.]*-[A-Za-z0-9][A-Za-z0-9.-]*(?:_|$)");
 
     private final ProjectMapper projectMapper;
     private final StoryboardShotMapper shotMapper;
@@ -462,7 +464,7 @@ public class ImportServiceImpl implements ImportService {
         return normalized;
     }
 
-    private String extractResourceName(String originalName) {
+    static String extractResourceName(String originalName) {
         String normalizedPath = originalName.replace('\\', '/');
         String baseName = normalizedPath.substring(normalizedPath.lastIndexOf('/') + 1);
         int dot = baseName.lastIndexOf('.');
@@ -475,9 +477,9 @@ public class ImportServiceImpl implements ImportService {
             baseName = matcher.group(1);
         }
 
-        int gptIndex = baseName.toLowerCase(Locale.ROOT).indexOf("_gpt-image");
-        if (gptIndex > 0) {
-            baseName = baseName.substring(0, gptIndex);
+        Matcher modelSuffix = MODEL_ID_SUFFIX.matcher(baseName);
+        if (modelSuffix.find() && modelSuffix.start() > 0) {
+            baseName = baseName.substring(0, modelSuffix.start());
         } else if (baseName.contains("_")) {
             baseName = baseName.split("_", 2)[0];
         }

@@ -143,7 +143,7 @@ public class AsyncImageTaskService {
     /**
      * 轮询图片生成任务(异步方法)
      *
-     * <p>在后台线程中定期查询 GeekNow 异步图片任务状态，直到成功、失败或超时。
+     * <p>在后台线程中定期查询已验证供应商的异步图片任务状态，直到成功、失败或超时。
      * 成功路径：下载/解码图片 → 上传OSS → 写入资产 → 扣费 → 子项SUCCEEDED → 聚合父Job。
      */
     @Async("taskExecutor")
@@ -241,7 +241,7 @@ public class AsyncImageTaskService {
     /**
      * 同步生成图片(异步线程中执行)
      *
-     * <p>GeekNow 异步图片接口只接受 http(s) 参考图 URL；当参考图是本地文件转出的
+     * <p>需要公网参考图的异步图片接口只接受 http(s) 参考图 URL；当参考图是本地文件转出的
      * base64 data URI 时无法走异步接口，退回同步 {@code generateImage}——但放在
      * 异步线程池里执行，消费线程照样立即释放，批量并行度不受影响。
      * 代价：此路径没有上游 taskId，服务重启后无法恢复（恢复逻辑会将其标记失败）。

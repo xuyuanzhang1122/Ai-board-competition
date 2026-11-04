@@ -7,7 +7,7 @@ import lombok.Data;
 
 import java.time.LocalDateTime;
 
-/** 同一 Job 内本地参考图到 GeekNow 公网 URL 的持久化映射。 */
+/** 同一 Job 内本地参考图到 供应商可访问 URL 的持久化映射。 */
 @Data
 @TableName("image_reference_uploads")
 public class ImageReferenceUpload {

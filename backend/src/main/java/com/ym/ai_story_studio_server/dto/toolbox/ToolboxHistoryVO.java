@@ -21,7 +21,7 @@ import java.time.LocalDateTime;
  * ToolboxHistoryVO history = new ToolboxHistoryVO(
  *     123L,
  *     "TEXT",
- *     "gemini-3.5-flash",
+ *     "deepseek-flash",
  *     "写一个科幻故事",
  *     null,
  *     "在2157年...",
@@ -35,7 +35,7 @@ import java.time.LocalDateTime;
  * ToolboxHistoryVO history = new ToolboxHistoryVO(
  *     124L,
  *     "IMAGE",
- *     "gpt-image-2",
+ *     "verified-image-model-id",
  *     "赛博朋克风格的城市",
  *     "16:9",
  *     "https://oss.example.com/ai_image_124.jpg",

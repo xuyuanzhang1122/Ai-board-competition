@@ -141,7 +141,7 @@ public class ToolboxController {
      * {
      *   "type": "IMAGE",
      *   "prompt": "赛博朋克风格的未来城市,霓虹灯,夜景",
-     *   "model": "gemini-3-pro-image-preview",
+     *   "model": "verified-image-model-id",
      *   "aspectRatio": "16:9",
      *   "duration": null,
      *   "referenceImageUrl": null
@@ -157,7 +157,7 @@ public class ToolboxController {
      *     "jobId": 123,
      *     "status": "PENDING",
      *     "type": "IMAGE",
-     *     "model": "gemini-3-pro-image-preview",
+     *     "model": "verified-image-model-id",
      *     "text": null,
      *     "resultUrl": null,
      *     "aspectRatio": "16:9",
@@ -193,7 +193,7 @@ public class ToolboxController {
      *     "jobId": 456,
      *     "status": "PENDING",
      *     "type": "VIDEO",
-     *     "model": "sd-api-2-fast-720p",
+     *     "model": "verified-video-model-id",
      *     "text": null,
      *     "resultUrl": null,
      *     "aspectRatio": "16:9",
@@ -209,7 +209,7 @@ public class ToolboxController {
      *   <li>prompt - 提示词,必填,1-10000字符</li>
      *   <li>model - 模型名称,可选,不指定则使用默认模型</li>
      *   <li>aspectRatio - 画幅比例,可选,IMAGE和VIDEO时可用</li>
-     *   <li>duration - 视频时长,可选,VIDEO时可用,具体范围由 GeekNow 模型决定</li>
+     *   <li>duration - 视频时长,可选,VIDEO时可用,具体范围由已验证模型能力决定</li>
      *   <li>referenceImageUrl - 参考图URL,可选,用于图生图或图生视频</li>
      * </ul>
      *
@@ -282,7 +282,7 @@ public class ToolboxController {
      *       {
      *         "id": 124,
      *         "type": "IMAGE",
-     *         "model": "gpt-image-2",
+     *         "model": "verified-image-model-id",
      *         "prompt": "赛博朋克城市",
      *         "aspectRatio": "16:9",
      *         "resultContent": "https://oss.example.com/ai_image_124.jpg",
