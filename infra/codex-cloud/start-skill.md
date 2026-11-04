@@ -45,12 +45,15 @@ node node_modules/vite/bin/vite.js build
 
 Unit tests and builds do not require live model credentials or production data.
 Full application startup additionally needs independently provisioned MySQL 8,
-Redis and RabbitMQ, and private Spring configuration. Current service startup
-has not been verified in this cloud environment. Report that boundary until it
-is actually resolved; do not silently substitute the original project's services.
+Redis and RabbitMQ, and private Spring configuration. The 2026-11-03 evidence
+in `docs/competition/云环境部署验收记录.md` records successful independent
+service startup and browser/API verification. Read that record before redoing
+setup; temporary tools/caches may need restoring after instance recreation.
+Check current instance readiness as needed, and do not substitute the original
+project's services or treat historical success as proof that an instance is live.
 
-Once services and private configuration are verified, use backend port 8080,
-frontend port 3000 and admin port 3001, with the platform-supported preview
+Use the isolated ports recorded by the existing deployment (backend 18080,
+frontend 13000, admin 13001), with the platform-supported preview
 binding. Check readiness before reporting success. Generate new development
 JWT/database/admin values in the private environment; never print them or commit
 them. Keep real text providers disabled until the user explicitly supplies cloud
