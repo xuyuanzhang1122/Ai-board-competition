@@ -1,3 +1,4 @@
+import { GenerationSettings } from './GenerationSettings'
 import { Button, Empty, Select } from '@lobehub/ui'
 import { AlertTriangle, ArrowLeft, Download, Play, Trash2, Video } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -204,7 +205,7 @@ export function VideoGeneratePanel({ onClose, shotId, shotNo }: VideoGeneratePan
   const previewThumbnail = previewItem?.thumbnailUrl || getVideoFallbackThumbnail(shot)
 
   return (
-    <section className="bg-white">
+    <section className="media-panel bg-white">
       <header className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
         <button
           className="flex items-center gap-2 rounded px-2 py-1.5 text-sm text-slate-600 hover:bg-slate-100"
@@ -288,6 +289,7 @@ export function VideoGeneratePanel({ onClose, shotId, shotNo }: VideoGeneratePan
           </ul>
         </div>
 
+        <GenerationSettings pending={models.length === 0} summary={models.find((item) => item.code === model)?.name || "尚无可用视频模型"}>
         <div className="grid grid-cols-3 gap-3">
           <label className="space-y-1 text-xs text-slate-500">
             <span>生成模型</span>
@@ -295,7 +297,8 @@ export function VideoGeneratePanel({ onClose, shotId, shotNo }: VideoGeneratePan
               disabled={modelsLoading || models.length === 0}
               options={models.map((item) => ({ label: modelOptionLabel(item), value: item.code }))}
               style={{ width: '100%' }}
-              value={model}
+              placeholder="待接入"
+            value={model || undefined}
               onChange={(value) => {
                 const nextModel = String(value)
                 setModel(nextModel)
@@ -308,7 +311,9 @@ export function VideoGeneratePanel({ onClose, shotId, shotNo }: VideoGeneratePan
             <span>画面尺寸</span>
             <Select
               style={{ width: '100%' }}
-              value={size}
+              disabled={models.length === 0}
+              placeholder="尺寸 · 待接入"
+              value={models.length ? size : undefined}
               options={getVideoResolutions(model).map((value) => ({
                 label: `${value} (${mapVideoSizeToAspectRatio(value)})`,
                 value,
@@ -321,11 +326,15 @@ export function VideoGeneratePanel({ onClose, shotId, shotNo }: VideoGeneratePan
             <Select
               options={getVideoDurations(model).map((value) => ({ label: `${value} 秒`, value }))}
               style={{ width: '100%' }}
-              value={duration}
+              disabled={models.length === 0}
+              placeholder="时长 · 待接入"
+              value={models.length ? duration : undefined}
               onChange={(value) => setDuration(Number(value) as VideoDuration)}
             />
           </label>
         </div>
+
+        </GenerationSettings>
 
         <Button
           block
@@ -334,7 +343,7 @@ export function VideoGeneratePanel({ onClose, shotId, shotNo }: VideoGeneratePan
           type="primary"
           onClick={() => void handleGenerate()}
         >
-          {isGenerating && progress > 0 ? `生成中 ${progress}%` : 'AI 生成视频'}
+          {isGenerating && progress > 0 ? `生成中 ${progress}%` : models.length === 0 ? 'AI 生成视频 · 待接入' : 'AI 生成视频'}
         </Button>
         {sceneAssetError ? (
           <p className="text-center text-xs text-rose-500">{sceneAssetError}</p>

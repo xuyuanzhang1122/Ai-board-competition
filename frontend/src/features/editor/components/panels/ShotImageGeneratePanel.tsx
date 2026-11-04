@@ -1,3 +1,4 @@
+import { GenerationSettings } from './GenerationSettings'
 import { Button, Empty, Select } from '@lobehub/ui'
 import {
   ArrowLeft,
@@ -258,7 +259,7 @@ export function ShotImageGeneratePanel({ onClose, shotId, shotNo }: ShotImageGen
   }
 
   return (
-    <section className="bg-white">
+    <section className="media-panel bg-white">
       <header className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
         <button
           className="flex items-center gap-2 rounded px-2 py-1.5 text-sm text-slate-600 hover:bg-slate-100"
@@ -359,10 +360,12 @@ export function ShotImageGeneratePanel({ onClose, shotId, shotNo }: ShotImageGen
               <Plus className="size-4" />
             </button>
           </div>
+          <GenerationSettings pending={models.length === 0} summary={models.find((item) => item.code === model)?.name || "尚无可用图片模型"}>
           <Select
             disabled={modelsLoading || models.length === 0}
             options={models.map((item) => ({ label: modelOptionLabel(item), value: item.code }))}
-            value={model}
+            placeholder="待接入"
+            value={model || undefined}
             onChange={(value) => {
               const nextModel = String(value)
               setModel(nextModel)
@@ -373,17 +376,20 @@ export function ShotImageGeneratePanel({ onClose, shotId, shotNo }: ShotImageGen
             }}
           />
           <Select
+            disabled={models.length === 0}
+            placeholder="画幅 · 待接入"
             options={getModelAspectRatios('IMAGE', model).map((value) => ({ label: value, value }))}
-            value={aspectRatio}
+            value={models.length ? aspectRatio : undefined}
             onChange={(value) => setAspectRatio(String(value) as ShotImageAspectRatio)}
           />
+          </GenerationSettings>
           <Button
             disabled={modelsLoading || models.length === 0}
             loading={isGenerating}
             type="primary"
             onClick={() => void handleGenerate()}
           >
-            {isGenerating && progress > 0 ? `生成中 ${progress}%` : 'AI 生成'}
+            {isGenerating && progress > 0 ? `生成中 ${progress}%` : models.length === 0 ? 'AI 生成图片 · 待接入' : 'AI 生成'}
           </Button>
         </div>
 

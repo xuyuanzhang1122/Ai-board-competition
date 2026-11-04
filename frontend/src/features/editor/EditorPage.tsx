@@ -1,3 +1,5 @@
+import './editor.css'
+
 import { Button } from '@lobehub/ui'
 import { FileDown, FileText, Home, Images, Settings } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -198,7 +200,7 @@ export function EditorPage() {
   }
 
   return (
-    <div className="flex h-screen w-full flex-col overflow-hidden bg-[radial-gradient(circle_at_12%_12%,#f0f9ff_0%,transparent_34%),radial-gradient(circle_at_88%_82%,#fff1f2_0%,transparent_30%),#f8fafc]">
+    <div className="editor-workspace flex h-screen w-full flex-col overflow-hidden bg-[radial-gradient(circle_at_12%_12%,#f0f9ff_0%,transparent_34%),radial-gradient(circle_at_88%_82%,#fff1f2_0%,transparent_30%),#f8fafc]">
       <header className="relative z-10 flex items-center justify-between gap-4 border-b border-white/80 bg-white/82 px-4 py-2 shadow-sm backdrop-blur-xl">
         <div className="flex min-w-0 items-center gap-2">
           <Link

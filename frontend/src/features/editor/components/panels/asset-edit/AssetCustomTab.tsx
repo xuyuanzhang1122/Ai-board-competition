@@ -3,13 +3,12 @@ import { ImagePlus, Loader2, RefreshCw } from 'lucide-react'
 import type React from 'react'
 import { useRef, useState } from 'react'
 
-import {
-  getModelAspectRatios,
-} from '@/features/toolbox/constants/toolbox-models'
+import { getModelAspectRatios } from '@/features/toolbox/constants/toolbox-models'
 import { modelOptionLabel } from '@/shared/components/ModelProviderIcon'
 import type { ModelVO } from '@/shared/types/api'
 
 import { uploadReferenceImage } from '../generation-helpers'
+import { GenerationSettings } from '../GenerationSettings'
 import { mediaUnavailableMessage } from '../panel-target'
 import { usePanelTarget } from '../usePanelTarget'
 import { defaultNotifier } from './notifier'
@@ -60,10 +59,12 @@ export function AssetCustomTab({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isUploadingReference, setIsUploadingReference] = useState(false)
 
-  const ratioOptions = getModelAspectRatios('IMAGE', modelCode).map((ratio) => ({
-    label: ratio,
-    value: ratio,
-  }))
+  const ratioOptions = getModelAspectRatios('IMAGE', modelCode).map(
+    (ratio) => ({
+      label: ratio,
+      value: ratio,
+    }),
+  )
 
   const canGenerate =
     !isGenerating &&
@@ -74,7 +75,9 @@ export function AssetCustomTab({
     Boolean(projectId) &&
     models.some((model) => model.code === modelCode)
 
-  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
     const file = event.target.files?.[0]
     if (!file) return
     event.target.value = ''
@@ -86,7 +89,9 @@ export function AssetCustomTab({
       defaultNotifier.success('参考图上传成功')
     } catch (error) {
       if (!target.current()) return
-      defaultNotifier.error(error instanceof Error ? error.message : '参考图上传失败')
+      defaultNotifier.error(
+        error instanceof Error ? error.message : '参考图上传失败',
+      )
     } finally {
       if (target.current()) setIsUploadingReference(false)
     }
@@ -100,9 +105,13 @@ export function AssetCustomTab({
   }
 
   return (
-    <div className="mb-6 space-y-3">
-      {unavailableMessage ? <p className="text-sm text-slate-500" role="status">{unavailableMessage}</p> : null}
-      <div className="flex gap-3">
+    <div className="asset-custom-layout mb-6 space-y-3">
+      {unavailableMessage ? (
+        <p className="text-sm text-slate-500" role="status">
+          {unavailableMessage}
+        </p>
+      ) : null}
+      <div className="asset-description-row">
         <div className="shrink-0">
           <input
             accept="image/*"
@@ -141,76 +150,84 @@ export function AssetCustomTab({
           )}
         </div>
 
-        <div className="flex min-w-0 flex-1 flex-col justify-end gap-2">
-          <Select
-            disabled={modelsLoading || models.length === 0}
-            options={models.map((model) => ({ label: modelOptionLabel(model), value: model.code }))}
-            style={{ width: '100%' }}
-            value={modelCode}
-            onChange={(value) => onModelChange(String(value))}
+        <div className="asset-description relative">
+          {isParsing ? (
+            <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-slate-100/80">
+              <div className="flex items-center gap-2 text-slate-600">
+                <Loader2 className="size-5 animate-spin" />
+                <span className="text-sm font-medium">
+                  AI正在解析
+                  {assetType === 'scene'
+                    ? '场景环境'
+                    : assetType === 'prop'
+                      ? '道具外观'
+                      : '人物形象'}
+                  …
+                </span>
+              </div>
+            </div>
+          ) : null}
+
+          <TextArea
+            className="w-full"
+            disabled={isParsing}
+            placeholder={`填写用于AI生图的${assetTypeLabel(assetType)}描述`}
+            resize={false}
+            rows={8}
+            style={{ minHeight: 178 }}
+            value={aiDescription}
+            onChange={(event) => onAiDescriptionChange(event.target.value)}
           />
-          <div className="grid grid-cols-[minmax(0,1fr)_minmax(96px,120px)] gap-2">
-            <Button
-              block
-              disabled={!canGenerate}
-              loading={isGenerating}
-              type="primary"
-              onClick={() => void onGenerate()}
+
+          {parseError ? (
+            <button
+              className="absolute bottom-3 right-3 flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600 hover:bg-slate-50"
+              type="button"
+              onClick={onRetryParse}
             >
-              AI 生成
-            </Button>
-            <Select
-              options={ratioOptions}
-              style={{ width: '100%' }}
-              value={aspectRatio}
-              onChange={(value) => onAspectRatioChange(String(value))}
-            />
-          </div>
-          <span className="text-xs text-slate-400">
-            参赛免费
-          </span>
+              <RefreshCw className="size-3.5" />
+              重试解析
+            </button>
+          ) : null}
         </div>
       </div>
-
-      <div className="relative">
-        {isParsing ? (
-          <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-slate-100/80">
-            <div className="flex items-center gap-2 text-slate-600">
-              <Loader2 className="size-5 animate-spin" />
-              <span className="text-sm font-medium">
-                AI正在解析
-                {assetType === 'scene'
-                  ? '场景环境'
-                  : assetType === 'prop'
-                    ? '道具外观'
-                    : '人物形象'}
-                …
-              </span>
-            </div>
-          </div>
-        ) : null}
-
-        <TextArea
-          className="w-full"
-          disabled={isParsing}
-          placeholder={`填写用于AI生图的${assetTypeLabel(assetType)}描述`}
-          resize={false}
-          rows={8}
-          style={{ minHeight: 178 }}
-          value={aiDescription}
-          onChange={(event) => onAiDescriptionChange(event.target.value)}
-        />
-
-        {parseError ? (
-          <button
-            className="absolute bottom-3 right-3 flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600 hover:bg-slate-50"
-            type="button"
-            onClick={onRetryParse}
-          >
-            <RefreshCw className="size-3.5" />
-            重试解析
-          </button>
-        ) : null}
+      <div className="asset-generation-footer">
+        <GenerationSettings
+          pending={models.length === 0}
+          summary={
+            models.find((item) => item.code === modelCode)?.name ||
+            '尚无可用图片模型'
+          }
+        >
+          <Select
+            disabled={modelsLoading || models.length === 0}
+            options={models.map((model) => ({
+              label: modelOptionLabel(model),
+              value: model.code,
+            }))}
+            style={{ width: '100%' }}
+            placeholder="待接入"
+            value={modelCode || undefined}
+            onChange={(value) => onModelChange(String(value))}
+          />
+          <Select
+            disabled={models.length === 0}
+            placeholder="画幅 · 待接入"
+            options={ratioOptions}
+            style={{ width: '100%' }}
+            value={models.length ? aspectRatio : undefined}
+            onChange={(value) => onAspectRatioChange(String(value))}
+          />
+        </GenerationSettings>{' '}
+        <Button
+          block
+          disabled={!canGenerate}
+          loading={isGenerating}
+          type="primary"
+          onClick={() => void onGenerate()}
+        >
+          {models.length === 0 ? 'AI 生成图片 · 待接入' : 'AI 生成'}
+        </Button>
       </div>
     </div>
   )

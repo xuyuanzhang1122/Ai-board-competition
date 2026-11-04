@@ -22,7 +22,7 @@ export function createTargetLease(expected: string, readCurrent: () => string) {
 }
 
 export const mediaUnavailableMessage = (loading: boolean, models: readonly { code: string }[]) =>
-  loading ? '正在加载媒体能力…' : models.length === 0 ? '图片/视频生成暂不可用，请等待参赛媒体能力开放。' : null
+  loading ? '正在加载媒体能力…' : models.length === 0 ? '图片/视频生成暂不可用 · 待接入，请等待参赛媒体能力开放。' : null
 
 /** Check each async boundary before a follow-up mutation, refresh or local-history write. */
 export function guardTargetDependencies<T extends object>(dependencies: T, current: () => boolean): T {

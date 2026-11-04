@@ -1,0 +1,301 @@
+/* Palette and layout are scoped to the editor; other pages retain their theme. */
+.editor-workspace {
+  color-scheme: dark;
+  background: #101113 !important;
+  color: #e4e5e7;
+}
+.editor-workspace > header {
+  background: #1d1f23;
+  border-color: #36393f;
+  box-shadow: none;
+  min-height: 58px;
+}
+.editor-workspace main {
+  padding: 16px;
+}
+.editor-workspace aside {
+  width: 400px;
+  background: #1d1f23;
+  border-color: #36393f;
+}
+.editor-workspace :is(section, header, [class*='bg-white']) {
+  background-color: #1d1f23;
+  background-image: none;
+}
+.editor-workspace [class*='bg-slate-50'],
+.editor-workspace [class*='bg-slate-100'] {
+  background-color: #282b30;
+}
+.editor-workspace [class*='text-slate-'],
+.editor-workspace [class*='text-gray-'] {
+  color: #b8bbc1;
+}
+.editor-workspace [class*='text-slate-800'],
+.editor-workspace [class*='text-slate-900'] {
+  color: #f4f4f5;
+}
+.editor-workspace [class*='border-'] {
+  border-color: #36393f;
+}
+.editor-workspace button {
+  color: inherit;
+}
+.editor-workspace button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.editor-workspace :is(input, textarea) {
+  background: #17191c;
+  color: #e4e5e7;
+  border-color: #44474e;
+}
+.editor-workspace :is(.ant-select-selector, .ant-segmented, .ant-btn-default) {
+  background: #282b30 !important;
+  color: #e4e5e7 !important;
+  border-color: #36393f !important;
+}
+.editor-workspace .ant-segmented-item-selected {
+  background: #404349 !important;
+  color: white !important;
+}
+.editor-workspace [class*='bg-blue-50'],
+.editor-workspace [class*='bg-sky-50'] {
+  background: #19313d;
+}
+.editor-workspace button:hover:not(:disabled) {
+  background-color: #343940;
+}
+.editor-workspace button:focus-visible,
+.editor-workspace summary:focus-visible {
+  outline: 2px solid #59ded2;
+  outline-offset: 3px;
+}
+.editor-workspace .media-panel {
+  min-height: calc(100vh - 60px);
+}
+.editor-workspace .media-panel > header {
+  position: sticky;
+  top: 0;
+  z-index: 12;
+}
+.editor-workspace .media-panel > div {
+  padding: 16px;
+}
+.editor-workspace .media-panel [class*='aspect-video'] {
+  background: #101113;
+  min-height: 200px;
+}
+.editor-workspace .asset-detail-body {
+  display: flex;
+  flex-direction: column;
+}
+.editor-workspace .asset-detail-body > :last-child {
+  border-top: 1px solid #36393f;
+  padding-top: 18px;
+}
+.editor-workspace .asset-custom-layout {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 400px;
+}
+.editor-workspace .asset-description {
+  order: 1;
+}
+.editor-workspace .asset-reference-controls {
+  order: 2;
+  margin-top: auto;
+  padding-top: 24px;
+  align-items: end;
+}
+.editor-workspace .asset-custom-layout > [role='status'] {
+  order: 0;
+  font-size: 12px;
+  color: #b8cbc8;
+}
+.generation-settings {
+  position: relative;
+  min-width: 0;
+}
+.generation-summary {
+  margin: 0 0 8px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #65d7cd;
+}
+.generation-settings details > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-radius: 22px;
+  background: #303339;
+  color: #e4e5e7;
+  cursor: pointer;
+  list-style: none;
+  font-size: 12px;
+}
+.generation-settings summary::-webkit-details-marker {
+  display: none;
+}
+.generation-settings-popover {
+  position: absolute;
+  bottom: 45px;
+  right: 0;
+  z-index: 25;
+  width: 320px;
+  max-width: calc(100vw - 40px);
+  padding: 18px;
+  border: 1px solid #454950;
+  border-radius: 16px;
+  background: #292c32;
+  color: #e4e5e7;
+  box-shadow: 0 12px 40px #0006;
+}
+.generation-settings-popover h4 {
+  margin: 0 0 14px;
+  font-size: 14px;
+}
+.generation-settings-popover > p {
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: #bdc1c7;
+}
+.generation-settings-popover > .grid {
+  display: flex;
+  flex-direction: column;
+}
+.generation-settings-popover .ant-select {
+  width: 100%;
+  min-width: 0;
+  margin-bottom: 8px;
+}
+.prop-photo-menu {
+  color-scheme: dark;
+  background: #24272c !important;
+  color: #eee;
+  border-color: #454950 !important;
+  width: 340px !important;
+}
+.prop-photo-menu ul {
+  display: flex;
+  gap: 8px;
+  overflow: auto;
+  padding: 12px 4px;
+}
+.prop-photo-menu li {
+  position: relative;
+  flex: 0 0 74px;
+  display: block;
+  margin: 0;
+}
+.prop-photo-menu li > button:first-child {
+  display: flex;
+  flex-direction: column;
+  padding: 5px;
+  gap: 8px;
+  width: 100%;
+  color: #eee;
+}
+.prop-photo-menu li > button:first-child:hover {
+  background: #3a4148;
+}
+.prop-photo-menu li > button:first-child > :first-child {
+  width: 60px;
+  height: 66px;
+  border: 1px solid #969ca5;
+  border-radius: 8px;
+  background: #1b1e22;
+  transform: rotate(-4deg);
+}
+.prop-photo-menu li:nth-child(even) > button:first-child > :first-child {
+  transform: rotate(4deg);
+}
+.prop-photo-menu li > button:first-child > span {
+  font-size: 12px;
+}
+.prop-photo-menu li > button:last-child {
+  position: absolute;
+  top: -6px;
+  right: -3px;
+  background: #542835;
+  color: #ffacc7;
+  padding: 4px;
+}
+@media (max-width: 1100px) {
+  .editor-workspace aside {
+    width: 340px;
+  }
+  .editor-workspace main {
+    padding: 8px;
+  }
+}
+.editor-workspace button {
+  background-color: #282b30;
+}
+.editor-workspace :is(input, textarea) {
+  background-color: #17191c !important;
+  color: #e4e5e7 !important;
+}
+.editor-workspace [role='combobox'] {
+  background: #282b30 !important;
+  color: #e4e5e7 !important;
+}
+.editor-workspace .generation-settings details > summary {
+  background: #303339;
+}
+.editor-workspace .asset-custom-layout {
+  min-height: 360px;
+}
+.asset-description-row {
+  display: flex;
+  gap: 12px;
+  align-items: stretch;
+}
+.asset-description-row .asset-description {
+  min-width: 0;
+  flex: 1;
+}
+.asset-description-row .shrink-0 > button {
+  width: 88px;
+  height: 110px;
+}
+.asset-generation-footer {
+  margin-top: auto;
+  padding-top: 24px;
+  display: flex;
+  align-items: end;
+  gap: 12px;
+}
+.asset-generation-footer .generation-settings {
+  flex: 1;
+}
+.asset-generation-footer > button {
+  width: auto !important;
+  min-width: 140px;
+}
+.editor-workspace .asset-detail-body > :last-child {
+  margin-top: 8px;
+}
+.editor-workspace aside input::placeholder {
+  color: #a2a7b0;
+}
+.asset-detail-panel .generation-settings-popover {
+  left: 0;
+  right: auto;
+}
+.editor-workspace
+  .generation-settings-popover
+  :is([class*='ant-select'], [class*='ant-select'] input) {
+  background-color: #292c32 !important;
+  color: #e4e5e7 !important;
+}
+.editor-workspace [data-active-panel='true'] {
+  background: #19313d;
+}
+.editor-workspace
+  :is([class*='ant-select'], [class*='ant-input'], [class*='ant-checkbox']) {
+  background-color: #282b30 !important;
+  color: #e4e5e7 !important;
+  border-color: #44474e !important;
+}

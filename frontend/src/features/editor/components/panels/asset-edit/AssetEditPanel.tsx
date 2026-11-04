@@ -279,7 +279,7 @@ export function AssetEditPanel({
     ].join(' ')
 
   return (
-    <section className="flex h-full flex-col bg-white">
+    <section className="media-panel asset-detail-panel flex h-full flex-col bg-white">
       <header className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
         <div className="flex items-center gap-3">
           <button
@@ -302,7 +302,7 @@ export function AssetEditPanel({
         </button>
       </header>
 
-      <div className="flex-1 overflow-y-auto px-6 py-6">
+      <div className="asset-detail-body flex-1 overflow-y-auto px-6 py-6">
         <div className="group relative mb-6 flex aspect-video w-full flex-col items-center justify-center overflow-hidden rounded-lg border-2 border-dashed border-slate-200 bg-slate-50">
           {generatedImageUrl ? (
             <>

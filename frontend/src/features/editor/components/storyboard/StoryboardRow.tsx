@@ -60,6 +60,7 @@ function StoryboardRowImpl({
   const projectId = useEditorStore((state) => state.projectId)
   const refreshShots = useEditorStore((state) => state.refreshShots)
   const openPanel = usePanelManagerStore((state) => state.openPanel)
+  const activePanelShot = usePanelManagerStore((state) => 'shotId' in state.panelData && state.panelData.shotId === shot.id)
   const bindings = useShotAssetBindings(shot)
 
   const openGeneration = (assetType: ShotMediaType) => {
@@ -94,6 +95,7 @@ function StoryboardRowImpl({
 
   return (
     <div
+      data-active-panel={activePanelShot || undefined}
       style={{ gridTemplateColumns: STORYBOARD_GRID_TEMPLATE }}
       className={`group/shot grid h-full overflow-hidden border-b border-slate-100 transition-colors ${
         selected ? 'bg-blue-50' : 'hover:bg-slate-50/70'

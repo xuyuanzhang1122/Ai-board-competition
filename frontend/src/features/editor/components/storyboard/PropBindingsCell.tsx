@@ -108,7 +108,7 @@ export function PropBindingsCell({ bindings, shot }: PropBindingsCellProps) {
             <Popover.Portal>
               <Popover.Content
                 aria-label="本镜道具列表"
-                className="z-[900] w-72 max-w-[calc(100vw-24px)] rounded-xl border border-slate-200 bg-white p-3 shadow-xl"
+                className="prop-photo-menu z-[900] w-72 max-w-[calc(100vw-24px)] rounded-xl border border-slate-200 bg-white p-3 shadow-xl"
                 collisionPadding={12}
                 id={listId}
                 ref={contentRef}
