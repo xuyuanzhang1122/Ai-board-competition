@@ -27,7 +27,7 @@ const NAV: {
   to: string
 }[] = [
   { icon: Home, key: 'home', label: '首页', to: '/home' },
-  { icon: PenLine, key: 'creation', label: '文字创作', to: '/creation' },
+  { icon: PenLine, key: 'creation', label: '落笔生辉', to: '/creation' },
   { icon: Sparkles, key: 'toolbox', label: '头脑风暴', to: '/brainstorm' },
   { icon: Sparkles, key: 'toolbox', label: '文字对话与历史', to: '/toolbox' },
   { icon: WalletCards, key: 'wallet', label: '钱包', to: '/wallet' },

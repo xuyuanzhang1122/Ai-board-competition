@@ -106,7 +106,7 @@ function CreationSession({
           <p className="creation-eyebrow">
             {BRANDING.competition} · {BRANDING.teamName}
           </p>
-          <h1>文字创作工作台</h1>
+          <h1>落笔生辉</h1>
           <p>简报 → 剧本 → 分镜 → 项目。生成先形成候选，由你采用、编辑并确认。</p>
         </div>
         <button disabled={busy} type="button" onClick={() => navigate('/creation')}>

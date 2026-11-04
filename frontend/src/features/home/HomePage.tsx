@@ -216,7 +216,7 @@ export function HomePage() {
               头脑风暴 · 资料与大纲创作
             </Button>
             <Button type="primary" onClick={() => navigate('/creation')}>
-              文字创作 · 从简报生成剧本与分镜
+              落笔生辉 · 从简报生成剧本与分镜
             </Button>
             <div aria-hidden className="home-scroll-cue">
               <ArrowDown className="size-4" /> 向下滚动，展开项目空间
