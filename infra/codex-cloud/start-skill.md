@@ -2,7 +2,12 @@
 
 Use the existing checkout `/workspace/Ai-board-competition` and its task work
 branch. Read AGENTS.md. Do not reset the branch, create a replacement checkout,
-copy local credentials, or import the original project's data.
+copy actual local secrets, or import the original project's database/storage.
+Read `docs/competition/云端任务交接.md` and `credentials/README.md` next.
+The tracked files under `credentials/` are user-authorized original work
+materials, not a secrets directory to skip wholesale. Reuse the original
+evidence and task reports; do not regenerate historical work. The upload
+manifest lists exactly what is present and which actual secret files are omitted.
 
 Keep GPT-6 Luna at low reasoning with fast mode off. Do not escalate to a
 high-consumption model. Reuse existing successful setup evidence and caches.

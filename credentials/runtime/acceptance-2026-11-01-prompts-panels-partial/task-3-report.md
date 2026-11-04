@@ -1,0 +1,14 @@
+# Task3 report
+
+Root native implementation, complete; independent review pending. Code commit in git log immediately after b7f2226.
+
+V46 adds persistent per-draft locked IDs, additive Draft field, revisioned lock endpoint/audit and STORYBOARD_PARTIAL prompt. Partial runs freeze input including full board and accepted request. Exact selected patch validated, merged against frozen base only, then normal whole-board validation. Timing/IDs/numbering/asset collection fixed. Adoption revision check rejects later lock or manual edits; full generation cannot bypass locks. Existing worker, restart semantics and UUID recovery reused. UI explicit target/lock/instruction, disabled when dirty or uncertain, owned evidence JSON export with model snapshots/usage/timings.
+
+Verification: combined Java *Test231 green (task1-all-java-reviewed.log); frontend324 tests, build/typecheck green root-frontend*.log. New helper/component RED missing modules; Java idempotent retry regression RED due IntNode/LongNode mismatch observed and normalized comparison fixed. Six new Java lifecycle tests, three component/target tests and one API regression. Scoped lint has zero errors, two pre-existing editors.tsx index-key warnings.
+
+Real isolated V45/V46 application startup succeeded. DeepSeek-flash job51/run12 for draft8 input revision5 produced valid candidate. Browser adopted candidate to revision6 (board confirmation cleared), confirmed revision7. Only shot1 changed to 海浪远景, locked shot2 retained, all3 unselected shots and assets bytewise equal to prior JSON. Duplicate submission returned run12; locked target rejected40002. Evidence API includes request, locks, LOCK_SHOTS event, job snapshot/usage; six-sheet Excel9979bytes downloaded. Original baseline copied existing virtual lighthouse board, explicitly marked manual fixture; only partial output new real generation. No real media calls. Ignored evidence: credentials/runtime/partial-regeneration-evidence.json; screenshot 局部重生成-采用确认.png.
+
+Root plan metadata lock contract edit remains for final documentation commit. Task2 editor migration has not yet begun; no shared-file edits there.
+
+## Review fix round1 — 2026-10-30
+Commit a705e43 separates lock-management availability from generation prerequisites. RED component regression reproduced inherited disabled fieldset, then three component tests GREEN. Current full frontend339/typecheck/scoped lint green. Isolated manual draft9 deliberately has stale board after script edit and confirmation; UI unlock of shot2 persisted revision7→8, restored full generation and kept partial generation disabled. Zero provider calls; private evidence unlock-stale-board-evidence.json and 旧分镜解锁回归.png. Scoped commit diff check passed; global diff temporarily reported two whitespace lines in concurrent Task2 work, delegated to that implementer.
