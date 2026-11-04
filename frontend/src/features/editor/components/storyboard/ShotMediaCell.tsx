@@ -1,5 +1,5 @@
 import { ActionIcon, Modal } from '@lobehub/ui'
-import { Download, History, RefreshCw } from 'lucide-react'
+import { Download, History, Maximize2, RefreshCw } from 'lucide-react'
 import { useState } from 'react'
 
 import { notify } from '@/shared/feedback/feedback'
@@ -59,11 +59,12 @@ export function ShotMediaCell({
         onDelete={asset.status === 'READY' ? onDelete : undefined}
         onGenerate={onGenerate}
         onOpenVersions={onOpenVersions}
-        onPreview={() => setPreviewOpen(true)}
+        onPreview={onGenerate}
       />
       <div className="mt-1.5 flex h-6 shrink-0 items-center justify-center gap-1">
         {asset.status === 'READY' && asset.currentUrl ? (
           <>
+            <ActionIcon icon={Maximize2} size="small" title="预览媒体" onClick={() => setPreviewOpen(true)} />
             <ActionIcon icon={History} size="small" title="查看版本" onClick={onOpenVersions} />
             <ActionIcon icon={RefreshCw} size="small" title="重新生成" onClick={onGenerate} />
             <ActionIcon
