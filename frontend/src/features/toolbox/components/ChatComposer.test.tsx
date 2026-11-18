@@ -9,8 +9,6 @@ const props = {
   model: '',
   onModelChange: vi.fn(),
   models: [],
-  type: 'TEXT' as const,
-  onTypeChange: vi.fn(),
   busy: false,
   locked: false,
   onSend: vi.fn(),
@@ -28,9 +26,11 @@ describe('conversation composer', () => {
     expect(html).toMatch(/<button[^>]*aria-label="发送消息"[^>]*disabled/)
     expect(html).not.toContain('提交任务')
   })
-  it('makes unimplemented media visibly unavailable without a submit path', () => {
-    const html = renderToStaticMarkup(<ChatComposer {...props} type="IMAGE" />)
-    expect(html).toContain('图片生成暂未开放')
-    expect(html).toMatch(/<button[^>]*aria-label="发送消息"[^>]*disabled/)
+  it('uses the plus button for file input without offering media generation', () => {
+    const html = renderToStaticMarkup(<ChatComposer {...props} />)
+    expect(html).toContain('aria-label="添加照片或文档"')
+    expect(html).toMatch(/<input[^>]*accept="image\/\*,\.pdf,\.doc,\.docx[^"]*"[^>]*type="file"/)
+    expect(html).not.toContain('图片生成')
+    expect(html).not.toContain('视频生成')
   })
 })

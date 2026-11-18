@@ -22,7 +22,6 @@ import { modelApi } from '@/features/editor/model-api'
 import { useUserStore } from '@/shared/store/user'
 import type { ModelVO } from '@/shared/types/api'
 
-import type { MessageType } from './api'
 import { ChatComposer } from './components/ChatComposer'
 import { ConversationMessage } from './components/ChatMessage'
 import { getComposerError } from './composer-validation'
@@ -43,7 +42,6 @@ export function ToolboxPage() {
   const [historyOpen, setHistoryOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [content, setContent] = useState('')
-  const [type, setType] = useState<MessageType>('TEXT')
   const [models, setModels] = useState<ModelVO[]>([])
   const [model, setModel] = useState('')
   const [modelAccount, setModelAccount] = useState<string | null>(null)
@@ -126,7 +124,6 @@ export function ToolboxPage() {
       activeTasks ||
       !content.trim() ||
       !model ||
-      type !== 'TEXT' ||
       account === null ||
       state.account !== account ||
       !!modelError ||
@@ -156,16 +153,15 @@ export function ToolboxPage() {
     <ChatComposer
       busy={creating || state.sending}
       content={content}
-      model={model}
-      models={availableModels}
-      type={type}
+      key={JSON.stringify([account, sessionId])}
       locked={
         activeTasks || !!state.pending || state.loading || !!modelError || state.account !== account
       }
+      model={model}
+      models={availableModels}
       onContentChange={setContent}
       onModelChange={setModel}
       onSend={() => void send()}
-      onTypeChange={setType}
     />
   )
   const pendingHere = state.pending?.sessionId === state.activeId

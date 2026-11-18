@@ -1,9 +1,9 @@
-import { ArrowUp, ChevronDown, ImageIcon, MessageSquare, Plus, Video } from 'lucide-react'
-import { useRef } from 'react'
+import { ArrowUp, ChevronDown, Plus } from 'lucide-react'
+import { type ChangeEvent, useLayoutEffect, useRef, useState } from 'react'
 
 import type { ModelVO } from '@/shared/types/api'
 
-import type { MessageType } from '../api'
+import { CHAT_FILE_ACCEPT, importChatDocument } from '../chat-input-document'
 import { getComposerError, MAX_CHAT_LENGTH } from '../composer-validation'
 
 interface Props {
@@ -15,8 +15,6 @@ interface Props {
   onContentChange: (value: string) => void
   onModelChange: (value: string) => void
   onSend: () => void
-  onTypeChange: (value: MessageType) => void
-  type: MessageType
 }
 export function ChatComposer({
   content,
@@ -24,16 +22,45 @@ export function ChatComposer({
   model,
   onModelChange,
   models,
-  type,
-  onTypeChange,
   busy,
   locked,
   onSend,
 }: Props) {
-  const menuRef = useRef<HTMLDetailsElement>(null)
-  const available = type === 'TEXT' && models.some((item) => item.code === model)
+  const fileInput = useRef<HTMLInputElement>(null)
+  const messageInput = useRef<HTMLTextAreaElement>(null)
+  const [reading, setReading] = useState(false)
+  const [fileError, setFileError] = useState('')
+  const available = models.some((item) => item.code === model)
   const validationError = getComposerError(content)
-  const disabled = busy || locked || !available || !content.trim() || !!validationError
+  const disabled = busy || locked || reading || !available || !content.trim() || !!validationError
+
+  useLayoutEffect(() => {
+    const input = messageInput.current
+    if (!input) return
+    input.style.height = 'auto'
+    input.style.height = `${Math.min(input.scrollHeight, 180)}px`
+  }, [content])
+
+  const addFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const picker = event.currentTarget
+    const file = picker.files?.[0]
+    picker.value = ''
+    if (!file) return
+    setFileError('')
+    setReading(true)
+    try {
+      const draft = await importChatDocument(file, () => messageInput.current?.value ?? '')
+      if (fileInput.current !== picker) return
+      onContentChange(draft)
+      messageInput.current?.focus()
+    } catch (error) {
+      if (fileInput.current === picker)
+        setFileError(error instanceof Error ? error.message : '无法读取文件，请重试。')
+    } finally {
+      if (fileInput.current === picker) setReading(false)
+    }
+  }
+
   return (
     <div className="toolbox-composer-wrap">
       <form
@@ -49,15 +76,11 @@ export function ChatComposer({
           maxLength={MAX_CHAT_LENGTH}
           rows={1}
           value={content}
-          placeholder={
-            type === 'TEXT'
-              ? '今天想聊点什么？'
-              : `${type === 'IMAGE' ? '图片' : '视频'}生成暂未开放`
-          }
+          placeholder="今天想聊点什么？"
+          ref={messageInput}
           onChange={(event) => {
             onContentChange(event.target.value)
-            event.target.style.height = 'auto'
-            event.target.style.height = `${Math.min(event.target.scrollHeight, 180)}px`
+            if (fileError) setFileError('')
           }}
           onKeyDown={(event) => {
             if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
@@ -77,48 +100,27 @@ export function ChatComposer({
           }}
         />
         <div className="toolbox-composer-tools">
-          <details className="toolbox-mode-menu" ref={menuRef}>
-            <summary aria-label="选择创作类型" title="选择创作类型">
-              <Plus size={22} />
-            </summary>
-            <div className="toolbox-mode-options">
-              {(
-                [
-                  { value: 'TEXT', label: '文字对话', Icon: MessageSquare },
-                  {
-                    value: 'IMAGE',
-                    label: '图片生成 · 暂未开放',
-                    Icon: ImageIcon,
-                  },
-                  { value: 'VIDEO', label: '视频生成 · 暂未开放', Icon: Video },
-                ] as const
-              ).map(({ value, label, Icon }) => (
-                <button
-                  aria-pressed={type === value}
-                  key={value}
-                  type="button"
-                  onClick={() => {
-                    onTypeChange(value)
-                    if (menuRef.current) menuRef.current.open = false
-                  }}
-                >
-                  <Icon size={17} />
-                  {label}
-                </button>
-              ))}
-            </div>
-          </details>
-          <span className="toolbox-type-label">
-            {type === 'TEXT'
-              ? '文字对话'
-              : type === 'IMAGE'
-                ? '图片生成暂未开放'
-                : '视频生成暂未开放'}
-          </span>
+          <input
+            accept={CHAT_FILE_ACCEPT}
+            hidden
+            ref={fileInput}
+            type="file"
+            onChange={(event) => void addFile(event)}
+          />
+          <button
+            aria-label="添加照片或文档"
+            className="toolbox-add-file"
+            disabled={reading || busy || locked}
+            title="添加照片或文档"
+            type="button"
+            onClick={() => fileInput.current?.click()}
+          >
+            <Plus aria-hidden size={22} />
+          </button>
           <label className="toolbox-model-select">
             <select
               aria-label="选择文字模型"
-              disabled={type !== 'TEXT' || models.length === 0 || busy || locked}
+              disabled={models.length === 0 || busy || locked}
               value={model}
               onChange={(event) => onModelChange(event.target.value)}
             >
@@ -151,11 +153,8 @@ export function ChatComposer({
           {validationError}
         </p>
       )}
-      {type !== 'TEXT' && (
-        <p className="toolbox-capability-note" role="status">
-          {type === 'IMAGE' ? '图片' : '视频'}
-          生成暂未开放，当前不会提交媒体任务。请选择文字对话继续。
-        </p>
+      {fileError && (
+        <p className="toolbox-capability-note" role="alert">{fileError}</p>
       )}
     </div>
   )
