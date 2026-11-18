@@ -28,7 +28,7 @@ export function CharacterBindingsCell({ bindings, shot }: CharacterBindingsCellP
 
   return (
     <>
-      <div className="grid w-[196px] grid-cols-3 gap-2">
+      <div className="grid w-full grid-cols-3 gap-1.5">
         {shot.characters.slice(0, 5).map((character) => {
           const projectCharacter = bindings.characters.find(
             (item) => item.id === character.characterId,

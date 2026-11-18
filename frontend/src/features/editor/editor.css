@@ -1,25 +1,30 @@
-/* Palette and layout are scoped to the editor; other pages retain their theme. */
+/* Dark storyboard surfaces are scoped to the editor route. */
 .editor-workspace {
+  --editor-bg: #14171c;
+  --editor-surface: #20252d;
+  --editor-border: #363f4b;
+  --editor-muted: #aeb9c7;
+  --editor-active: #203940;
   color-scheme: dark;
-  background: #101113 !important;
-  color: #e4e5e7;
+  background: var(--editor-bg);
+  color: #e8edf3;
 }
 .editor-workspace > header {
-  background: #1d1f23;
-  border-color: #36393f;
-  box-shadow: none;
-  min-height: 58px;
+  min-height: 56px;
+  background: var(--editor-surface);
+  border-color: var(--editor-border);
 }
-.editor-workspace main {
-  padding: 16px;
+.editor-board {
+  padding: 12px;
 }
-.editor-workspace aside {
-  width: 400px;
-  background: #1d1f23;
-  border-color: #36393f;
+.editor-side-panel {
+  --editor-panel-width: clamp(290px, 24vw, 388px);
+  flex: 0 0 var(--editor-panel-width);
+  background: var(--editor-surface);
+  border-color: var(--editor-border);
 }
 .editor-workspace :is(section, header, [class*='bg-white']) {
-  background-color: #1d1f23;
+  background-color: var(--editor-surface);
   background-image: none;
 }
 .editor-workspace [class*='bg-slate-50'],
@@ -28,14 +33,14 @@
 }
 .editor-workspace [class*='text-slate-'],
 .editor-workspace [class*='text-gray-'] {
-  color: #b8bbc1;
+  color: var(--editor-muted);
 }
 .editor-workspace [class*='text-slate-800'],
 .editor-workspace [class*='text-slate-900'] {
   color: #f4f4f5;
 }
 .editor-workspace [class*='border-'] {
-  border-color: #36393f;
+  border-color: var(--editor-border);
 }
 .editor-workspace button {
   color: inherit;
@@ -65,10 +70,9 @@
 .editor-workspace button:hover:not(:disabled) {
   background-color: #343940;
 }
-.editor-workspace button:focus-visible,
-.editor-workspace summary:focus-visible {
+.editor-workspace :is(button, summary):focus-visible {
   outline: 2px solid #59ded2;
-  outline-offset: 3px;
+  outline-offset: -2px;
 }
 .editor-workspace .media-panel {
   min-height: calc(100vh - 60px);
@@ -83,7 +87,7 @@
 }
 .editor-workspace .media-panel [class*='aspect-video'] {
   background: #101113;
-  min-height: 200px;
+  min-height: 140px;
 }
 .editor-workspace .asset-detail-body {
   display: flex;
@@ -127,13 +131,14 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 9px 12px;
-  border-radius: 22px;
+  padding: 8px 10px;
+  border-radius: 10px;
   background: #303339;
   color: #e4e5e7;
   cursor: pointer;
   list-style: none;
   font-size: 12px;
+  white-space: nowrap;
 }
 .generation-settings summary::-webkit-details-marker {
   display: none;
@@ -143,8 +148,7 @@
   bottom: 45px;
   right: 0;
   z-index: 25;
-  width: 320px;
-  max-width: calc(100vw - 40px);
+  width: min(296px, calc(var(--editor-panel-width) - 36px));
   padding: 18px;
   border: 1px solid #454950;
   border-radius: 16px;
@@ -175,7 +179,7 @@
   background: #24272c !important;
   color: #eee;
   border-color: #454950 !important;
-  width: 340px !important;
+  width: 368px !important;
 }
 .prop-photo-menu ul {
   display: flex;
@@ -222,14 +226,6 @@
   color: #ffacc7;
   padding: 4px;
 }
-@media (max-width: 1100px) {
-  .editor-workspace aside {
-    width: 340px;
-  }
-  .editor-workspace main {
-    padding: 8px;
-  }
-}
 .editor-workspace button {
   background-color: #282b30;
 }
@@ -272,12 +268,12 @@
 }
 .asset-generation-footer > button {
   width: auto !important;
-  min-width: 140px;
+  min-width: 112px;
 }
 .editor-workspace .asset-detail-body > :last-child {
   margin-top: 8px;
 }
-.editor-workspace aside input::placeholder {
+.editor-side-panel input::placeholder {
   color: #a2a7b0;
 }
 .asset-detail-panel .generation-settings-popover {
@@ -290,12 +286,129 @@
   background-color: #292c32 !important;
   color: #e4e5e7 !important;
 }
-.editor-workspace [data-active-panel='true'] {
-  background: #19313d;
-}
 .editor-workspace
-  :is([class*='ant-select'], [class*='ant-input'], [class*='ant-checkbox']) {
+  :is(.ant-select, .ant-input) {
   background-color: #282b30 !important;
   color: #e4e5e7 !important;
   border-color: #44474e !important;
+}
+
+.editor-workspace .storyboard-surface {
+  background: #191e25;
+  border-color: var(--editor-border);
+}
+
+.editor-workspace .storyboard-toolbar,
+.editor-workspace .storyboard-columns {
+  background: #232a33;
+  color: #c7d1dd;
+  border-color: var(--editor-border);
+}
+
+.storyboard-row > div + div,
+.storyboard-columns > div + div {
+  border-left: 1px solid #b4c7db12;
+}
+
+.editor-workspace .storyboard-row:hover,
+.editor-workspace .storyboard-row:focus-within {
+  background-color: #242d37;
+}
+
+.editor-workspace .storyboard-row.bg-blue-50 {
+  background-color: #283744;
+}
+
+.editor-workspace .storyboard-row[data-active-panel='true'] {
+  background-color: var(--editor-active);
+  box-shadow: inset 3px 0 #79c9bd;
+}
+
+.editor-workspace .storyboard-number {
+  margin: 0;
+  border: 0;
+  background: #303d4b;
+  color: #e8edf3;
+  font-variant-numeric: tabular-nums;
+}
+
+.storyboard-actions button,
+.storyboard-media button[title] {
+  background-color: transparent;
+}
+
+.storyboard-actions button[title='删除分镜'] {
+  color: #ff9b9f;
+}
+
+.editor-workspace .storyboard-toolbar .ant-btn-primary {
+  background: #76c5b9;
+  color: #122321 !important;
+  border-color: transparent;
+}
+
+.editor-workspace .storyboard-toolbar .ant-btn-primary:hover {
+  background: #9edacf;
+}
+
+.editor-workspace .storyboard-checkbox:not(:has(svg)) {
+  background: #191e25;
+  border-color: #82919f;
+}
+
+.editor-workspace .ant-input-affix-wrapper {
+  background: #282b30;
+  border-color: var(--editor-border);
+}
+
+.editor-workspace .ant-input-affix-wrapper > .ant-input,
+.editor-workspace .editor-side-panel .ant-select .ant-select-input {
+  background: transparent !important;
+}
+
+.editor-workspace .ant-select-content,
+.editor-workspace .ant-select-suffix,
+.editor-workspace .ant-input-clear-icon {
+  color: var(--editor-muted);
+}
+
+.editor-workspace .media-panel > div > [role='status'] {
+  padding: 9px 11px;
+  border: 1px solid #3c5b5e;
+  border-radius: 8px;
+  background: #26373d;
+  color: #b6d6d2;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.editor-workspace .ant-empty-description {
+  color: var(--editor-muted);
+}
+
+@media (width <= 880px) {
+  .editor-board {
+    padding: 8px;
+  }
+
+  .editor-side-panel {
+    --editor-panel-width: 270px;
+  }
+}
+
+@media (width <= 650px) {
+  .editor-workspace > div:has(> .editor-board) {
+    flex-direction: column;
+  }
+
+  .editor-board {
+    min-height: 0;
+  }
+
+  .editor-side-panel {
+    --editor-panel-width: 100vw;
+    flex-basis: 40%;
+    border-top: 1px solid var(--editor-border);
+    border-left: 0;
+  }
 }

@@ -1,5 +1,6 @@
 import './creation.css'
 
+import { Plus } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
@@ -107,9 +108,9 @@ function CreationSession({
             {BRANDING.competition} · {BRANDING.teamName}
           </p>
           <h1>落笔生辉</h1>
-          <p>简报 → 剧本 → 分镜 → 项目。生成先形成候选，由你采用、编辑并确认。</p>
         </div>
-        <button disabled={busy} type="button" onClick={() => navigate('/creation')}>
+        <button className="creation-new" disabled={busy} type="button" onClick={() => navigate('/creation')}>
+          <Plus aria-hidden size={16} />
           新建创作
         </button>
       </header>
@@ -137,7 +138,7 @@ function CreationSession({
           ))}
           <p className="creation-hint">已受理的生成在服务端继续执行，关闭页面不会取消任务。</p>
         </aside>
-        <main className="creation-workspace">
+        <div className="creation-workspace">
           <div className="creation-card creation-toolbar">
             <label className="creation-field">
               <span>官方文字模型 · 当前启用目录</span>
@@ -163,7 +164,12 @@ function CreationSession({
                 {dirty ? ' · 有未保存编辑' : ''}
               </span>
               {busy && <Waiting />}
-              <button disabled={locked || (draft !== null && !dirty)} type="button" onClick={save}>
+              <button
+                className="creation-primary"
+                disabled={locked || (draft !== null && !dirty)}
+                type="button"
+                onClick={save}
+              >
                 {draft ? '保存修改' : '保存简报'}
               </button>
             </div>
@@ -463,7 +469,7 @@ function CreationSession({
             </div>
           </section>
           <footer className="creation-hint">{BRANDING.disclaimer}</footer>
-        </main>
+        </div>
       </div>
     </div>
   )

@@ -50,7 +50,7 @@ export function ShotMediaCell({
   }
 
   return (
-    <div className="flex h-[110px] w-[128px] flex-col">
+    <div className="storyboard-media flex h-[110px] w-full flex-col">
       <AssetCell
         asset={asset}
         label={label}
@@ -61,7 +61,7 @@ export function ShotMediaCell({
         onOpenVersions={onOpenVersions}
         onPreview={onGenerate}
       />
-      <div className="mt-1.5 flex h-6 shrink-0 items-center justify-center gap-1">
+      <div className="mt-1.5 flex h-6 shrink-0 items-center justify-center">
         {asset.status === 'READY' && asset.currentUrl ? (
           <>
             <ActionIcon icon={Maximize2} size="small" title="预览媒体" onClick={() => setPreviewOpen(true)} />

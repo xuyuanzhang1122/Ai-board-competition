@@ -206,7 +206,7 @@ function StoryboardTableImpl({ assetDialogs }: StoryboardTableProps) {
   )
 
   return (
-    <section className="relative flex h-full min-h-[560px] flex-col overflow-hidden rounded-xl border border-slate-200/80 bg-white/90 shadow-[0_18px_60px_rgba(148,163,184,0.12)] backdrop-blur-sm">
+    <section className="storyboard-surface relative flex h-full min-h-0 flex-col overflow-hidden rounded-xl border">
       {storyboardImport.importing || storyboardImport.supplementing ? (
         <div className="absolute inset-0 z-30 flex items-center justify-center bg-white/72 backdrop-blur-[3px]">
           <div className="w-[min(420px,calc(100%-32px))] rounded-2xl border border-sky-100 bg-white/95 p-5 shadow-[0_24px_80px_rgba(56,189,248,0.18)]">
@@ -227,7 +227,7 @@ function StoryboardTableImpl({ assetDialogs }: StoryboardTableProps) {
           </div>
         </div>
       ) : null}
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+      <header className="storyboard-toolbar flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2.5">
         <div className="flex flex-wrap items-center gap-2">
           <h2 className="text-base font-semibold text-slate-900">分镜表</h2>
           <Tag>{shots.length} 条</Tag>
@@ -320,33 +320,35 @@ function StoryboardTableImpl({ assetDialogs }: StoryboardTableProps) {
         ) : (
           <div style={{ minWidth: STORYBOARD_MIN_WIDTH }}>
             <div
-              className="sticky top-0 z-10 grid border-b border-slate-200 bg-slate-50 text-left text-xs font-semibold text-slate-500"
+              className="storyboard-columns sticky top-0 z-10 grid items-center border-b text-left text-xs font-semibold"
               style={{ gridTemplateColumns: STORYBOARD_GRID_TEMPLATE }}
             >
-              <div className="px-3 py-3">
+              <div className="px-2 py-2.5">
                 <Checkbox
+                  backgroundColor="#4f9f94"
                   checked={allSelected}
+                  className="storyboard-checkbox"
                   indeterminate={hasSelection && !allSelected}
                   onChange={() => (allSelected ? deselectAll() : selectAll())}
                 />
               </div>
-              <div className="px-3 py-3">编号</div>
-              <div className="px-3 py-3">剧本</div>
-              <div className="flex items-center gap-1 px-3 py-3">
-                角色画像
+              <div className="px-2 py-2.5">编号</div>
+              <div className="px-2 py-2.5">剧本</div>
+              <div className="flex items-center gap-1 px-2 py-2.5">
+                角色
                 {recognizeButton('character', '角色')}
               </div>
-              <div className="flex items-center gap-1 px-3 py-3">
-                场景画像
+              <div className="flex items-center gap-1 px-2 py-2.5">
+                场景
                 {recognizeButton('scene', '场景')}
               </div>
-              <div className="flex items-center gap-1 px-3 py-3">
-                道具画像
+              <div className="flex items-center gap-1 px-2 py-2.5">
+                道具
                 {recognizeButton('prop', '道具')}
               </div>
-              <div className="px-3 py-3">分镜图</div>
-              <div className="px-3 py-3">视频</div>
-              <div className="px-3 py-3">操作</div>
+              <div className="px-2 py-2.5">分镜图</div>
+              <div className="px-2 py-2.5">视频</div>
+              <div className="px-2 py-2.5">操作</div>
             </div>
             <div style={{ height: rowVirtualizer.getTotalSize(), position: 'relative' }}>
               {rowVirtualizer.getVirtualItems().map((virtualRow) => {

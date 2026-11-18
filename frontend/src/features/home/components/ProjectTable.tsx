@@ -16,7 +16,6 @@ interface ProjectTableProps {
   onEditProject: (project: ProjectVO) => void
   onMoveProject: (project: ProjectVO) => void
   projects: ProjectVO[]
-  scrollEnabled?: boolean
 }
 
 function formatDate(date: string) {
@@ -39,7 +38,6 @@ export function ProjectTable({
   onEditProject,
   onMoveProject,
   projects,
-  scrollEnabled = true,
 }: ProjectTableProps) {
   const activeTab = useHomeUiStore((state) => state.activeTab)
   const selectedFolderId = useHomeUiStore((state) => state.selectedFolderId)
@@ -89,9 +87,9 @@ export function ProjectTable({
         ) : null}
       </div>
 
-      <div className={`min-h-0 flex-1 ${scrollEnabled ? 'overflow-auto' : 'overflow-hidden'}`}>
-        <div className="min-w-[640px]">
-          <div className="grid grid-cols-12 gap-4 border-b border-border bg-muted/60 px-4 py-2 text-xs font-medium text-muted-foreground">
+      <div className="min-h-0 flex-1 overflow-auto">
+        <div className="home-project-table min-w-[640px]">
+          <div className="home-project-columns grid grid-cols-12 gap-4 border-b border-border bg-muted/60 px-4 py-2 text-xs font-medium text-muted-foreground">
             <div className="col-span-6">名称</div>
             <div className="col-span-3">更新时间</div>
             <div className="col-span-3 text-right">操作</div>
@@ -112,7 +110,7 @@ export function ProjectTable({
             <div className="divide-y divide-border">
               {visibleProjects.map((project) => (
                 <div
-                  className="grid cursor-default grid-cols-12 gap-4 px-4 py-3 transition-colors hover:bg-rose-50/50"
+                  className="home-project-row grid cursor-default grid-cols-12 gap-4 px-4 py-3 transition-colors hover:bg-muted/50"
                   key={project.id}
                   title="双击进入编辑"
                   onDoubleClick={() => onEditProject(project)}
@@ -166,7 +164,7 @@ export function ProjectTable({
             <div className="divide-y divide-border">
               {folders.map((folder) => (
                 <div
-                  className="grid grid-cols-12 gap-4 px-4 py-2 transition-colors hover:bg-muted/50"
+                  className="home-project-row grid grid-cols-12 gap-4 px-4 py-2 transition-colors hover:bg-muted/50"
                   key={folder.id}
                 >
                   <button

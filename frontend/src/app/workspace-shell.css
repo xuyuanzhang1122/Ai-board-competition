@@ -1,0 +1,116 @@
+.workspace-shell {
+  background: #f6f4f1;
+}
+
+.workspace-shell > .workspace-navigation {
+  width: 208px;
+  border-color: #e7ded7;
+  background: #fcfaf7;
+}
+
+.workspace-shell .workspace-navigation > div:first-child {
+  display: none;
+}
+
+.workspace-shell .workspace-brand {
+  border-color: #e7ded7;
+  padding: 18px 16px;
+}
+
+.workspace-shell .workspace-brand p,
+.workspace-shell .workspace-nav-heading {
+  color: #75675e;
+  letter-spacing: 0;
+}
+
+.workspace-shell nav a {
+  color: #675c55;
+  border-radius: 9px;
+}
+
+.workspace-shell nav a:hover {
+  color: #342e2a;
+  background: #f4ede6;
+  box-shadow: none;
+}
+
+.workspace-shell nav a[aria-current='page'] {
+  color: #753d2b;
+  background: #f2e3d7;
+  box-shadow: none;
+}
+
+.workspace-shell .workspace-profile {
+  border-color: #e7ded7;
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+.workspace-shell .workspace-logout,
+.workspace-shell .workspace-edition {
+  color: #75675e;
+}
+
+.workspace-shell > main {
+  padding: clamp(16px, 2.5vw, 36px);
+}
+
+.workspace-shell:has(.home-page) > main {
+  padding: 0;
+}
+
+@media (width <= 760px) {
+  .workspace-shell > .workspace-navigation {
+    width: 58px;
+  }
+
+  .workspace-shell .workspace-brand {
+    justify-content: center;
+    padding: 12px 8px;
+  }
+
+  .workspace-shell .workspace-brand > img {
+    width: 32px;
+    height: 32px;
+  }
+
+  .workspace-shell .workspace-brand > div,
+  .workspace-shell .workspace-nav-heading,
+  .workspace-shell .workspace-edition,
+  .workspace-shell .workspace-profile > div > :not(:first-child) {
+    display: none;
+  }
+
+  .workspace-shell nav {
+    padding: 12px 6px;
+  }
+
+  .workspace-shell nav a,
+  .workspace-shell .workspace-logout {
+    justify-content: center;
+    padding-inline: 0;
+  }
+
+  .workspace-shell .workspace-nav-label,
+  .workspace-shell .workspace-logout > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .workspace-shell .workspace-navigation > :last-child {
+    padding-inline: 6px;
+  }
+
+  .workspace-shell .workspace-profile {
+    padding: 6px;
+  }
+
+  .workspace-shell .workspace-profile > div > :first-child {
+    width: 32px;
+    height: 32px;
+  }
+}

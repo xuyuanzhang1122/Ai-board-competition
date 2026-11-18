@@ -17,20 +17,22 @@ export function ShotRowActions({
   onMergeUp,
 }: ShotRowActionsProps) {
   return (
-    <div className="flex min-w-[112px] items-center gap-1 opacity-30 transition-opacity group-hover/shot:opacity-100">
+    <div className="storyboard-actions flex flex-col items-center gap-1">
       <ActionIcon
         disabled={isFirst}
         icon={MoveUp}
+        size="small"
         title="向上合并"
         onClick={onMergeUp}
       />
       <ActionIcon
         disabled={isLast}
         icon={MoveDown}
+        size="small"
         title="向下合并"
         onClick={onMergeDown}
       />
-      <ActionIcon color="red" icon={Trash2} title="删除分镜" onClick={onDelete} />
+      <ActionIcon color="red" icon={Trash2} size="small" title="删除分镜" onClick={onDelete} />
     </div>
   )
 }

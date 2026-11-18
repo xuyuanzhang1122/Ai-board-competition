@@ -27,7 +27,7 @@ export function SceneBindingCell({ bindings, shot }: SceneBindingCellProps) {
 
   return (
     <>
-      <div className="grid w-[120px] grid-cols-2 gap-2">
+      <div className="grid w-full grid-cols-2 gap-1.5">
         {shot.scene ? (
           <BindingTile
             imageUrl={shot.scene.thumbnailUrl}

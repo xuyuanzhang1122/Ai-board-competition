@@ -1,5 +1,5 @@
 import { ActionIcon } from '@lobehub/ui'
-import { CircleAlert, ImageOff, LoaderCircle, PlayCircle, Trash2 } from 'lucide-react'
+import { CircleAlert, ImagePlus, LoaderCircle, PlayCircle, Trash2 } from 'lucide-react'
 
 import type { AssetStatusVO } from '@/shared/types/api'
 
@@ -97,8 +97,10 @@ export function AssetCell({
           <LoaderCircle aria-hidden className="size-5 animate-spin text-blue-500" />
         ) : asset.status === 'FAILED' ? (
           <CircleAlert aria-hidden className="size-5 text-red-500" />
+        ) : mediaType === 'video' ? (
+          <PlayCircle aria-hidden className="size-5 text-slate-400" />
         ) : (
-          <ImageOff aria-hidden className="size-5 text-slate-400" />
+          <ImagePlus aria-hidden className="size-5 text-slate-400" />
         )}
         {asset.status !== 'READY' ? (
           <span className={`text-[11px] font-medium ${presentation.textClass}`}>

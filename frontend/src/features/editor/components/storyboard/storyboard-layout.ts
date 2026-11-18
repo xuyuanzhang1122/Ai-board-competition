@@ -7,11 +7,10 @@
 export const STORYBOARD_ROW_HEIGHT = 144
 
 export const STORYBOARD_GRID_TEMPLATE =
-  '48px 64px minmax(320px,1fr) 220px 144px 144px 152px 152px 132px'
+  '36px 42px minmax(216px,1fr) 154px 106px 106px 110px 110px 44px'
 
-// Sum of the fixed columns (1056) + the script column min (320). Used as the
-// horizontal-scroll min width so columns never collapse below their design size.
-export const STORYBOARD_MIN_WIDTH = 1376
+// Sum of the fixed columns and the script minimum, with horizontal scrolling below it.
+export const STORYBOARD_MIN_WIDTH = 924
 
 // Number of off-screen rows rendered above/below the viewport for smooth scroll.
 export const STORYBOARD_OVERSCAN = 4

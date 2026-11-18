@@ -283,6 +283,7 @@ export function AssetEditPanel({
       <header className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
         <div className="flex items-center gap-3">
           <button
+            aria-label={`返回${typeLabel}列表`}
             className="rounded p-1.5 text-slate-500 hover:bg-slate-100"
             type="button"
             onClick={onClose}
@@ -294,6 +295,7 @@ export function AssetEditPanel({
           </h3>
         </div>
         <button
+          aria-label="关闭详情"
           className="rounded p-1.5 text-slate-500 hover:bg-slate-100"
           type="button"
           onClick={onClose}

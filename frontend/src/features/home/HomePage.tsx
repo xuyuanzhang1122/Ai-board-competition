@@ -2,11 +2,10 @@ import './home.css'
 
 import { ActionIcon, Button, Input } from '@lobehub/ui'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowDown, ArrowLeft, FolderPlus, Plus, Search, Sparkles, X } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { ArrowLeft, ArrowUpRight, FolderPlus, PenLine, Plus, Search, Sparkles, X } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
-import logo from '@/assets/logo.svg'
 import { BRANDING } from '@/shared/constants/config'
 import { confirmAction, notify } from '@/shared/feedback/feedback'
 import { useUserStore } from '@/shared/store/user'
@@ -42,10 +41,6 @@ export function HomePage() {
   const [showCreateFolderModal, setShowCreateFolderModal] = useState(false)
   const [editingFolder, setEditingFolder] = useState<FolderVO | null>(null)
   const [movingProject, setMovingProject] = useState<ProjectVO | null>(null)
-  const [projectDocked, setProjectDocked] = useState(false)
-  const scrollRef = useRef<HTMLDivElement>(null)
-  const projectSurfaceRef = useRef<HTMLDivElement>(null)
-
   const projectsQuery = useQuery({
     queryFn: () =>
       homeApi.getProjects({
@@ -190,45 +185,31 @@ export function HomePage() {
     moveProjectMutation.isPending
 
   return (
-    <div
-      className="home-page h-full min-h-[640px] overflow-y-auto"
-      ref={scrollRef}
-      onScroll={() => {
-        const top = projectSurfaceRef.current?.getBoundingClientRect().top ?? Number.POSITIVE_INFINITY
-        setProjectDocked(top <= 18)
-      }}
-    >
-      <div className="home-scroll-content mx-auto max-w-[1440px] px-5 py-4 lg:px-7">
-        <section className="home-hero-panel overflow-hidden rounded-[28px]">
+    <div className="home-page h-full overflow-y-auto">
+      <div className="home-scroll-content">
+        <section aria-labelledby="home-title" className="home-hero-panel">
           <div className="home-hero-content">
-            <div className="home-hero-copy">
-              <div className="home-hero-kicker"><Sparkles aria-hidden size={16} /> {BRANDING.competition}</div>
-              <div className="flex items-center gap-5">
-                <img alt={BRANDING.appName} className="home-hero-logo" src={logo} />
-                <div>
-                  <h1>AI <span>创作工作台</span></h1>
-                  <p>{BRANDING.teamName}</p>
-                  <p className="home-competition-disclaimer">{BRANDING.disclaimer}</p>
-                </div>
-              </div>
-            </div>
-            <Button type="primary" onClick={() => navigate('/brainstorm')}>
-              头脑风暴 · 资料与大纲创作
-            </Button>
-            <Button type="primary" onClick={() => navigate('/creation')}>
-              落笔生辉 · 从简报生成剧本与分镜
-            </Button>
-            <div aria-hidden className="home-scroll-cue">
-              <ArrowDown className="size-4" /> 向下滚动，展开项目空间
-            </div>
+            <p className="home-hero-kicker">{BRANDING.competition}</p>
+            <h1 id="home-title">AI 创作工作台</h1>
+            <p className="home-hero-team">{BRANDING.teamName}</p>
+            <p className="home-competition-disclaimer">{BRANDING.disclaimer}</p>
           </div>
         </section>
 
-        <section className="home-project-stage">
-          <div
-            className={`home-project-surface ${projectDocked ? 'is-docked' : ''}`}
-            ref={projectSurfaceRef}
-          >
+        <div className="home-entry-grid">
+          <button className="home-entry" type="button" onClick={() => navigate('/brainstorm')}>
+            <span className="home-entry-icon"><Sparkles aria-hidden size={21} /></span>
+            <span><strong>头脑风暴</strong><small>资料与大纲创作</small></span>
+            <ArrowUpRight aria-hidden className="home-entry-arrow" size={18} />
+          </button>
+          <button className="home-entry" type="button" onClick={() => navigate('/creation')}>
+            <span className="home-entry-icon"><PenLine aria-hidden size={21} /></span>
+            <span><strong>落笔生辉</strong><small>从简报生成剧本与分镜</small></span>
+            <ArrowUpRight aria-hidden className="home-entry-arrow" size={18} />
+          </button>
+        </div>
+
+        <section className="home-project-surface">
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex min-w-0 items-center gap-3">
               {selectedFolderId !== null ? (
@@ -237,9 +218,9 @@ export function HomePage() {
                 </Button>
               ) : null}
               <div className="min-w-0">
-                <h1 className="truncate text-base font-semibold text-foreground">
+                <h2 className="truncate text-xl font-semibold text-foreground">
                   {selectedFolderId !== null ? `${selectedFolderName} 中的项目` : '所有项目'}
-                </h1>
+                </h2>
                 <p className="text-xs text-muted-foreground">
                   共 {visibleProjectCount} 个项目 · {folders.length} 个文件夹
                 </p>
@@ -247,14 +228,14 @@ export function HomePage() {
             </div>
 
             <div className="flex flex-wrap items-center justify-end gap-2">
-              <Button icon={Plus} onClick={() => setShowCreateProjectModal(true)}>
+              <Button className="home-project-create" icon={Plus} type="primary" onClick={() => setShowCreateProjectModal(true)}>
                 新建项目
               </Button>
               <Button icon={FolderPlus} onClick={() => setShowCreateFolderModal(true)}>
                 新建文件夹
               </Button>
               {showSearchInput ? (
-                <div className="flex min-w-[240px] items-center gap-1">
+                <div className="flex min-w-0 max-w-full items-center gap-1">
                   <Input
                     allowClear
                     autoFocus
@@ -287,14 +268,12 @@ export function HomePage() {
               folders={folders}
               loading={projectsQuery.isPending || foldersQuery.isPending}
               projects={projects}
-              scrollEnabled={projectDocked}
               onDeleteFolder={handleDeleteFolder}
               onDeleteProject={handleDeleteProject}
               onEditFolder={setEditingFolder}
               onEditProject={(project) => navigate(`/editor/${project.id}`)}
               onMoveProject={setMovingProject}
             />
-          </div>
           </div>
         </section>
       </div>

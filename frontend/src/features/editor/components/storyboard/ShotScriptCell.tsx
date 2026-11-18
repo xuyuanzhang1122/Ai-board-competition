@@ -48,12 +48,12 @@ export function ShotScriptCell({ onSave, shot }: ShotScriptCellProps) {
   return (
     <>
       <div className="group/script relative h-full w-full">
-        <div className="absolute right-1 top-0 z-10 flex gap-1 opacity-0 transition group-hover/script:opacity-100">
+        <div className="absolute right-1 top-0 z-10 flex gap-1 opacity-0 transition group-hover/script:opacity-100 group-focus-within/script:opacity-100">
           <ActionIcon icon={Copy} size="small" title="复制剧本" onClick={() => void copyScript()} />
           <ActionIcon icon={Pencil} size="small" title="编辑剧本" onClick={() => setEditing(true)} />
         </div>
         <div
-          className="max-h-[120px] cursor-text overflow-y-auto whitespace-pre-wrap break-words px-1 text-sm leading-6 text-slate-800"
+          className="max-h-[120px] cursor-text overflow-y-auto whitespace-pre-wrap break-words px-1 text-[13px] leading-5 text-slate-800"
           dangerouslySetInnerHTML={{ __html: highlightedScript }}
           title="双击编辑"
           onDoubleClick={() => setEditing(true)}

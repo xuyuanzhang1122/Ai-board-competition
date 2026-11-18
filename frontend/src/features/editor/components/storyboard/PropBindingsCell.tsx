@@ -51,7 +51,7 @@ export function PropBindingsCell({ bindings, shot }: PropBindingsCellProps) {
 
   return (
     <>
-      <div className="flex w-[120px] flex-col gap-2">
+      <div className="flex w-full flex-col gap-1.5">
         {shot.props.length > 0 ? (
           <Popover.Root open={expanded} onOpenChange={setExpanded}>
             <Popover.Anchor asChild>
@@ -82,10 +82,10 @@ export function PropBindingsCell({ bindings, shot }: PropBindingsCellProps) {
                   setExpanded(true)
                 }}
               >
-                <span aria-hidden className="relative block h-16 w-24">
+                <span aria-hidden className="relative block h-14 w-[80px]">
                   {shot.props.slice(0, 3).map((prop, index) => (
                     <span
-                      className="absolute top-1 flex size-12 items-center justify-center overflow-hidden rounded-lg border-2 border-white bg-slate-100 shadow-sm"
+                      className="absolute top-1 flex size-10 items-center justify-center overflow-hidden rounded-lg border-2 border-white bg-slate-100 shadow-sm"
                       key={prop.bindingId}
                       style={{ left: index * 18, transform: `rotate(${(index - 1) * 6}deg)` }}
                     >

@@ -1,3 +1,5 @@
+import './workspace-shell.css'
+
 import { Button, Input, Modal } from '@lobehub/ui'
 import {
   ChevronRight,
@@ -50,6 +52,7 @@ export function MainLayout() {
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const avatarInputRef = useRef<HTMLInputElement>(null)
+  const polishedWorkspace = location.pathname === '/home' || /^\/creation(?:\/|$)/.test(location.pathname)
   const usesOwnScroller = location.pathname === '/toolbox' || location.pathname === '/home'
 
   useEffect(() => {
@@ -110,18 +113,18 @@ export function MainLayout() {
   const displayName = user?.nickname || '创作者'
 
   return (
-    <div className="flex h-screen bg-[#f7f7f8] text-foreground">
-      <aside className="relative flex w-[248px] shrink-0 flex-col overflow-hidden border-r border-rose-100/70 bg-[linear-gradient(180deg,#fffaf7_0%,#fff_42%,#fff8f5_100%)]">
+    <div className={cn('flex h-screen bg-[#f7f7f8] text-foreground', polishedWorkspace && 'workspace-shell')}>
+      <aside className="workspace-navigation relative flex w-[248px] shrink-0 flex-col overflow-hidden border-r border-rose-100/70 bg-[linear-gradient(180deg,#fffaf7_0%,#fff_42%,#fff8f5_100%)]">
         <div className="pointer-events-none absolute -left-16 top-20 size-48 rounded-full bg-rose-200/20 blur-3xl" />
-        <div className="relative flex items-center gap-3 border-b border-rose-100/70 px-5 py-5">
+        <div className="workspace-brand relative flex items-center gap-3 border-b border-rose-100/70 px-5 py-5">
           <img alt={BRANDING.appName} className="size-11 rounded-[14px] shadow-sm" src={logo} />
           <div className="min-w-0">
-            <h1 className="truncate text-base font-bold tracking-tight text-slate-900">{BRANDING.appName}</h1>
+            <strong className="block truncate text-base font-bold tracking-tight text-slate-900">{BRANDING.appName}</strong>
             <p className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.16em] text-slate-400">{BRANDING.teamName}</p>
           </div>
         </div>
 
-        <div className="relative px-5 pb-2 pt-5 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">创作空间</div>
+        <div className="workspace-nav-heading relative px-5 pb-2 pt-5 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">创作空间</div>
         <nav className="relative flex flex-col gap-1.5 px-3">
           {NAV.filter((item) => FEATURE_FLAGS[item.key]).map((item) => {
             const Icon = item.icon
@@ -138,7 +141,7 @@ export function MainLayout() {
                 }
               >
                 <Icon aria-hidden className="size-[18px]" size={18} />
-                <span>{item.label}</span>
+                <span className="workspace-nav-label">{item.label}</span>
               </NavLink>
             )
           })}
@@ -146,7 +149,8 @@ export function MainLayout() {
 
         <div className="relative mt-auto px-3 pb-4 pt-4">
           <button
-            className="group w-full rounded-2xl border border-rose-100 bg-white/85 p-3 text-left shadow-[0_10px_32px_rgba(15,23,42,0.06)] backdrop-blur-xl transition hover:-translate-y-0.5 hover:border-rose-200 hover:shadow-[0_14px_38px_rgba(244,63,94,0.10)]"
+            aria-label="编辑个人资料"
+            className="workspace-profile group w-full rounded-2xl border border-rose-100 bg-white/85 p-3 text-left shadow-[0_10px_32px_rgba(15,23,42,0.06)] backdrop-blur-xl transition hover:-translate-y-0.5 hover:border-rose-200 hover:shadow-[0_14px_38px_rgba(244,63,94,0.10)]"
             type="button"
             onClick={openProfile}
           >
@@ -169,13 +173,15 @@ export function MainLayout() {
             </div>
           </button>
           <button
-            className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-medium text-slate-400 transition hover:bg-white hover:text-slate-700"
+            aria-label="退出登录"
+            className="workspace-logout mt-2 flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-medium text-slate-400 transition hover:bg-white hover:text-slate-700"
             type="button"
             onClick={handleLogout}
           >
-            <LogOut className="size-3.5" /> 退出登录
+            <LogOut aria-hidden className="size-3.5" />
+            <span>退出登录</span>
           </button>
-          <p className="mt-2 text-center text-[10px] text-slate-300">
+          <p className="workspace-edition mt-2 text-center text-[10px] text-slate-300">
             你的不对我的队 · 参赛展示版
           </p>
         </div>

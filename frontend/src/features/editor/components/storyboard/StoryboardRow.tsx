@@ -97,29 +97,34 @@ function StoryboardRowImpl({
     <div
       data-active-panel={activePanelShot || undefined}
       style={{ gridTemplateColumns: STORYBOARD_GRID_TEMPLATE }}
-      className={`group/shot grid h-full overflow-hidden border-b border-slate-100 transition-colors ${
+      className={`storyboard-row group/shot grid h-full overflow-hidden border-b border-slate-100 transition-colors ${
         selected ? 'bg-blue-50' : 'hover:bg-slate-50/70'
       }`}
     >
-      <div className="overflow-hidden px-3 py-3">
-        <Checkbox checked={selected} onChange={onToggleSelect} />
+      <div className="overflow-hidden px-2 py-3">
+        <Checkbox
+          backgroundColor="#4f9f94"
+          checked={selected}
+          className="storyboard-checkbox"
+          onChange={onToggleSelect}
+        />
       </div>
-      <div className="overflow-hidden px-3 py-3">
-        <Tag>{shot.shotNo}</Tag>
+      <div className="overflow-hidden px-2 py-3">
+        <Tag className="storyboard-number">{shot.shotNo}</Tag>
       </div>
-      <div className="overflow-hidden px-3 py-3">
+      <div className="overflow-hidden px-2 py-3">
         <ShotScriptCell shot={shot} onSave={onUpdateScript} />
       </div>
-      <div className="overflow-hidden px-3 py-3">
+      <div className="overflow-hidden px-2 py-3">
         <CharacterBindingsCell bindings={bindings} shot={shot} />
       </div>
-      <div className="overflow-hidden px-3 py-3">
+      <div className="overflow-hidden px-2 py-3">
         <SceneBindingCell bindings={bindings} shot={shot} />
       </div>
-      <div className="overflow-hidden px-3 py-3">
+      <div className="overflow-hidden px-2 py-3">
         <PropBindingsCell bindings={bindings} shot={shot} />
       </div>
-      <div className="overflow-hidden px-3 py-3">
+      <div className="overflow-hidden px-2 py-3">
         <ShotMediaCell
           asset={shot.shotImage}
           label="分镜图"
@@ -129,7 +134,7 @@ function StoryboardRowImpl({
           onOpenVersions={() => openVersions('shot-image', shot.shotImage)}
         />
       </div>
-      <div className="overflow-hidden px-3 py-3">
+      <div className="overflow-hidden px-2 py-3">
         <ShotMediaCell
           asset={shot.video}
           label="视频"
@@ -140,7 +145,7 @@ function StoryboardRowImpl({
           onOpenVersions={() => openVersions('video', shot.video)}
         />
       </div>
-      <div className="overflow-hidden px-3 py-3">
+      <div className="overflow-hidden px-2 py-3">
         <ShotRowActions
           isFirst={isFirst}
           isLast={isLast}
