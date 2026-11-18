@@ -5,7 +5,6 @@ import {
   BookOpen,
   ChevronDown,
   ChevronLeft,
-  House,
   LoaderCircle,
   MessageSquare,
   PanelLeft,
@@ -172,36 +171,6 @@ export function ToolboxPage() {
   const pendingHere = state.pending?.sessionId === state.activeId
   return (
     <div className="toolbox-app">
-      <nav aria-label="工具箱导航" className="toolbox-rail">
-        <Link aria-label="返回创作首页" className="toolbox-brand" title="返回创作首页" to="/home">
-          <Sparkles size={25} />
-        </Link>
-        <button
-          aria-label="新对话"
-          title="新对话"
-          type="button"
-          onClick={() => chooseSession(null)}
-        >
-          <SquarePen size={22} />
-        </button>
-        <button
-          aria-expanded={historyOpen}
-          aria-label="会话历史"
-          title="会话历史"
-          type="button"
-          onClick={() => setHistoryOpen((value) => !value)}
-        >
-          <PanelLeft size={22} />
-        </button>
-        <Link aria-label="创作工作台" title="创作工作台" to="/home">
-          <House size={22} />
-        </Link>
-        <div className="toolbox-rail-bottom">
-          <span title="你的不对我的队 · 参赛展示">
-            <Sparkles size={18} />
-          </span>
-        </div>
-      </nav>
       {historyOpen && (
         <>
           <button
@@ -209,7 +178,7 @@ export function ToolboxPage() {
             className="toolbox-history-scrim"
             onClick={() => setHistoryOpen(false)}
           />
-          <aside aria-label="会话列表" className="toolbox-history">
+          <aside aria-label="会话列表" className="toolbox-history" id="toolbox-session-history">
             <div className="toolbox-history-heading">
               <strong>你的对话</strong>
               <button aria-label="收起会话历史" onClick={() => setHistoryOpen(false)}>
@@ -265,7 +234,7 @@ export function ToolboxPage() {
           </aside>
         </>
       )}
-      <main className="toolbox-main">
+      <div className="toolbox-main">
         <header className="toolbox-header">
           <Link to="/home">
             创作工具箱
@@ -274,6 +243,21 @@ export function ToolboxPage() {
           <span>
             {state.sessions.find((item) => item.id === state.activeId)?.title || '新对话'}
           </span>
+          <div aria-label="会话操作" className="toolbox-header-actions" role="group">
+            <button aria-label="新对话" title="新对话" type="button" onClick={() => chooseSession(null)}>
+              <SquarePen aria-hidden size={18} />
+            </button>
+            <button
+              aria-controls={historyOpen ? 'toolbox-session-history' : undefined}
+              aria-expanded={historyOpen}
+              aria-label="会话历史"
+              title="会话历史"
+              type="button"
+              onClick={() => setHistoryOpen((value) => !value)}
+            >
+              <PanelLeft aria-hidden size={18} />
+            </button>
+          </div>
         </header>
         {(state.error || (state.pending && !state.sending) || modelError) && (
           <div className="toolbox-notice" role="alert">
@@ -361,7 +345,7 @@ export function ToolboxPage() {
             </p>
           </section>
         )}
-      </main>
+      </div>
     </div>
   )
 }

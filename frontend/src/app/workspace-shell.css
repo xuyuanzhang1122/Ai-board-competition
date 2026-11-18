@@ -8,10 +8,6 @@
   background: #fcfaf7;
 }
 
-.workspace-shell .workspace-navigation > div:first-child {
-  display: none;
-}
-
 .workspace-shell .workspace-brand {
   border-color: #e7ded7;
   padding: 18px 16px;
@@ -23,21 +19,24 @@
   letter-spacing: 0;
 }
 
-.workspace-shell nav a {
+.workspace-shell .workspace-nav-link {
   color: #675c55;
   border-radius: 9px;
 }
 
-.workspace-shell nav a:hover {
+.workspace-shell .workspace-nav-link:hover {
   color: #342e2a;
   background: #f4ede6;
-  box-shadow: none;
 }
 
-.workspace-shell nav a[aria-current='page'] {
+.workspace-shell .workspace-nav-link[aria-current='page'] {
   color: #753d2b;
   background: #f2e3d7;
-  box-shadow: none;
+}
+
+.workspace-shell .workspace-nav-link:focus-visible {
+  outline: 2px solid #974d37;
+  outline-offset: -2px;
 }
 
 .workspace-shell .workspace-profile {
@@ -51,12 +50,8 @@
   color: #75675e;
 }
 
-.workspace-shell > main {
+.workspace-content {
   padding: clamp(16px, 2.5vw, 36px);
-}
-
-.workspace-shell:has(.home-page) > main {
-  padding: 0;
 }
 
 @media (width <= 760px) {
@@ -81,11 +76,11 @@
     display: none;
   }
 
-  .workspace-shell nav {
+  .workspace-shell .workspace-nav {
     padding: 12px 6px;
   }
 
-  .workspace-shell nav a,
+  .workspace-shell .workspace-nav-link,
   .workspace-shell .workspace-logout {
     justify-content: center;
     padding-inline: 0;

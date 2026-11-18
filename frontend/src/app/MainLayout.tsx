@@ -6,6 +6,7 @@ import {
   CircleDollarSign,
   Home,
   LogOut,
+  MessagesSquare,
   PenLine,
   Sparkles,
   Upload,
@@ -31,7 +32,7 @@ const NAV: {
   { icon: Home, key: 'home', label: '首页', to: '/home' },
   { icon: PenLine, key: 'creation', label: '落笔生辉', to: '/creation' },
   { icon: Sparkles, key: 'toolbox', label: '头脑风暴', to: '/brainstorm' },
-  { icon: Sparkles, key: 'toolbox', label: '文字对话与历史', to: '/toolbox' },
+  { icon: MessagesSquare, key: 'toolbox', label: '文字对话与历史', to: '/toolbox' },
   { icon: WalletCards, key: 'wallet', label: '钱包', to: '/wallet' },
   { icon: CircleDollarSign, key: 'recharge', label: '充值', to: '/recharge' },
   { icon: Users, key: 'invite', label: '邀请', to: '/invite' },
@@ -52,8 +53,7 @@ export function MainLayout() {
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const avatarInputRef = useRef<HTMLInputElement>(null)
-  const polishedWorkspace = location.pathname === '/home' || /^\/creation(?:\/|$)/.test(location.pathname)
-  const usesOwnScroller = location.pathname === '/toolbox' || location.pathname === '/home'
+  const usesOwnScroller = /^\/(home|toolbox)(?:\/|$)/.test(location.pathname)
 
   useEffect(() => {
     if (user) return
@@ -113,10 +113,9 @@ export function MainLayout() {
   const displayName = user?.nickname || '创作者'
 
   return (
-    <div className={cn('flex h-screen bg-[#f7f7f8] text-foreground', polishedWorkspace && 'workspace-shell')}>
-      <aside className="workspace-navigation relative flex w-[248px] shrink-0 flex-col overflow-hidden border-r border-rose-100/70 bg-[linear-gradient(180deg,#fffaf7_0%,#fff_42%,#fff8f5_100%)]">
-        <div className="pointer-events-none absolute -left-16 top-20 size-48 rounded-full bg-rose-200/20 blur-3xl" />
-        <div className="workspace-brand relative flex items-center gap-3 border-b border-rose-100/70 px-5 py-5">
+    <div className="workspace-shell flex h-dvh text-foreground">
+      <aside className="workspace-navigation flex shrink-0 flex-col overflow-y-auto border-r">
+        <div className="workspace-brand flex items-center gap-3 border-b">
           <img alt={BRANDING.appName} className="size-11 rounded-[14px] shadow-sm" src={logo} />
           <div className="min-w-0">
             <strong className="block truncate text-base font-bold tracking-tight text-slate-900">{BRANDING.appName}</strong>
@@ -124,21 +123,16 @@ export function MainLayout() {
           </div>
         </div>
 
-        <div className="workspace-nav-heading relative px-5 pb-2 pt-5 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">创作空间</div>
-        <nav className="relative flex flex-col gap-1.5 px-3">
+        <div className="workspace-nav-heading px-5 pb-2 pt-5 text-[11px] font-semibold">创作空间</div>
+        <nav aria-label="创作空间" className="workspace-nav flex flex-col gap-1.5 px-3">
           {NAV.filter((item) => FEATURE_FLAGS[item.key]).map((item) => {
             const Icon = item.icon
             return (
               <NavLink
                 key={item.to}
                 to={item.to}
-                className={({ isActive }) =>
-                  cn(
-                    'group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-500 transition-all duration-200 hover:bg-white hover:text-slate-900 hover:shadow-sm',
-                    isActive &&
-                      'bg-[linear-gradient(135deg,#fb7185,#f97316)] text-white shadow-[0_10px_30px_rgba(244,63,94,0.22)] hover:text-white',
-                  )
-                }
+                className="workspace-nav-link flex items-center gap-3 px-3 py-2.5 text-sm font-medium"
+                title={item.label}
               >
                 <Icon aria-hidden className="size-[18px]" size={18} />
                 <span className="workspace-nav-label">{item.label}</span>
@@ -187,7 +181,7 @@ export function MainLayout() {
         </div>
       </aside>
 
-      <main className={cn('min-w-0 flex-1', usesOwnScroller ? 'overflow-hidden' : 'overflow-auto p-6')}>
+      <main className={cn('min-w-0 flex-1', usesOwnScroller ? 'overflow-hidden' : 'workspace-content overflow-auto')}>
         <Outlet />
       </main>
 
